@@ -5,8 +5,9 @@ A World of Warcraft addon that adds a short section to gear tooltips showing **w
 Stat priorities and trinket ratings come from [Icy Veins](https://www.icy-veins.com/wow/) (patch 12.1.5, Midnight). You can override any spec's priority in the game.
 
 <p>
-  <img src="images/tooltip-match.jpg" width="49%" alt="Tooltip listing the specs that suit a pair of leather shoulders">
-  <img src="images/tooltip-cloak.jpg" width="49%" alt="Tooltip listing the specs that suit a cloak">
+  <img src="images/tooltip-match.jpg" alt="WhichClass tooltip section listing the specs that suit a pair of leather shoulders">
+  &nbsp;
+  <img src="images/tooltip-cloak.jpg" alt="WhichClass tooltip section listing the specs that suit a cloak">
 </p>
 
 ## Features
