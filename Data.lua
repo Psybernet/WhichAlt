@@ -218,3 +218,82 @@ for _, cols in ipairs(EachRow(ns.TrinketText, 6, "TrinketData.lua")) do
 		list[#list + 1] = { spec = spec, content = content ~= "-" and content ~= "" and content or nil, tier = tier }
 	end
 end
+
+---------------------------------------------------------------------------
+-- Custom roles, made in the Customise tab and kept in WhichClassDB.roles:
+--   roles["DRUID:Guardian"] = { { name = "Mythic+ AoE", text = "Haste > ..." } }
+-- Each one becomes an extra build on its spec, so the tooltip treats it
+-- like the Icy Veins builds.
+---------------------------------------------------------------------------
+
+local function RoleKey(spec)
+	return spec.class .. ":" .. spec.spec
+end
+
+local function AttachRole(spec, name, text)
+	local build = { label = name, defaultText = text, isRole = true, key = "role:" .. RoleKey(spec) .. ":" .. name }
+	if not ns.SetBuildPriority(build, nil) then return nil end
+	spec.builds[#spec.builds + 1] = build
+	return build
+end
+
+-- Adds saved roles to their specs at login. Drops any that can't be read.
+function ns.LoadRoles()
+	for _, spec in ipairs(ns.Specs) do
+		local key = RoleKey(spec)
+		local kept = {}
+		for _, role in ipairs(ns.db.roles[key] or {}) do
+			if type(role) == "table" and role.name and role.text and AttachRole(spec, role.name, role.text) then
+				kept[#kept + 1] = role
+			end
+		end
+		ns.db.roles[key] = #kept > 0 and kept or nil
+	end
+end
+
+-- True if the spec already has a role (Icy Veins or custom) with this name.
+function ns.RoleNameTaken(spec, name)
+	name = name:lower()
+	for _, build in ipairs(spec.builds) do
+		if (build.label or "Default"):lower() == name then return true end
+	end
+	return false
+end
+
+function ns.AddRole(spec, name, text)
+	local key = RoleKey(spec)
+	local build = AttachRole(spec, name, text)
+	if not build then return nil end
+	ns.db.roles[key] = ns.db.roles[key] or {}
+	table.insert(ns.db.roles[key], { name = name, text = text })
+	return build
+end
+
+function ns.SaveRole(spec, build, text)
+	for _, role in ipairs(ns.db.roles[RoleKey(spec)] or {}) do
+		if role.name == build.label then role.text = text end
+	end
+	build.defaultText = text
+	ns.SetBuildPriority(build, nil)
+end
+
+function ns.RemoveRole(spec, build)
+	for i = #spec.builds, 1, -1 do
+		if spec.builds[i] == build then table.remove(spec.builds, i) end
+	end
+	local key = RoleKey(spec)
+	local list = ns.db.roles[key] or {}
+	for i = #list, 1, -1 do
+		if list[i].name == build.label then table.remove(list, i) end
+	end
+	if #list == 0 then ns.db.roles[key] = nil end
+end
+
+function ns.RemoveAllRoles()
+	for _, spec in ipairs(ns.Specs) do
+		for i = #spec.builds, 1, -1 do
+			if spec.builds[i].isRole then table.remove(spec.builds, i) end
+		end
+	end
+	wipe(ns.db.roles)
+end

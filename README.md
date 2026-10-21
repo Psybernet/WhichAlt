@@ -17,7 +17,7 @@ Stat priorities and trinket ratings come from [Icy Veins](https://www.icy-veins.
 - **Second best and very low ratings**: when no spec has the item's stats as its top two, it lists the specs it's second best for, or warns that the stats are very low for everyone.
 - **Trinket ratings**: the Icy Veins tier (S, A, B…) for every spec that rates the trinket.
 - **Settings window** to turn each part on or off.
-- **Customise tab**: drag a spec's stats into your own order and save it.
+- **Customise tab**: drag a spec's stats into your own order and save it, or add your own roles.
 - **Light on performance**: nothing runs on a timer. Results are worked out once per item and cached.
 
 ## Installing
@@ -59,21 +59,32 @@ The full list for every spec is in the reference image below.
 |---|---|
 | Show WhichClass in tooltips (same as right-clicking the minimap button) | On |
 | Show lower quality ratings ("second best" and "very low") | On |
-| Show off-hand items (shields, off-hand weapons and held items) | On |
-| Show trinket ratings | On |
-| Only Bind on Equip and Warbound items | On |
 
-Turn off **Only Bind on Equip and Warbound items** to see WhichClass on soulbound gear too, such as dungeon and raid drops.
+**Only show tooltip for:** WhichClass only appears on items whose binding is ticked. Off-hand items and trinkets can be switched off too.
+
+| Option | Default |
+|---|---|
+| Bind on Equip items | On |
+| Warbound items (including Warbound until equipped) | On |
+| Soulbound items (including dungeon and raid drops that bind when picked up) | Off |
+| Off-hand items (shields, off-hand weapons and held items) | On |
+| Trinkets (Icy Veins tier, or matched by stats if unrated) | On |
 
 ### Customising stat priorities
 
 <img src="images/settings-customise.jpg" width="640" alt="Customise settings tab">
 
-1. Pick a class, spec and (where there's more than one) build.
+1. Pick a **Class**, **Spec** and **Role**. Roles are the Icy Veins builds (hero talents, Raid or Mythic+, survivability or damage) plus any you've made.
 2. Drag the stat boxes into your order, and choose `>` (better than) or `=` (equal to) between them. Under each box you can see how the tooltip will treat that stat.
-3. Press **Save**. The row flashes green and the spec shows as using your custom priority. Specs you've changed get a gold `*` in the dropdowns.
+3. Press **Save**. The row flashes green and the role shows as using your custom priority. Specs you've changed get a gold `*` in the dropdowns.
 
-**Reset to default** puts the current spec back to the Icy Veins priority. **Reset all specs** clears every custom priority, after asking first.
+**Reset to default** puts the current role back to the Icy Veins priority. **Reset all specs** clears every custom priority and role, after asking first.
+
+### Your own roles
+
+Press **New role** under the Role dropdown, type a name and press **Create** (or Enter). The new role starts as a copy of the priority on screen, so you can set up the order first and then save it as a role. Edit it and press **Save** like any other role.
+
+Your roles show in the tooltip in brackets, for example *Windwalker Monk (Mastery stack)*. When a spec has only one Icy Veins priority, that one shows as *(Default)* once you've added a role. **Delete role** removes the selected role, after asking first.
 
 ## Stat priority reference
 

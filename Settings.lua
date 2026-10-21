@@ -3,9 +3,9 @@ local _, ns = ...
 -- The settings window is built the first time it's opened. Everything here
 -- reacts to clicks; nothing runs on a timer.
 
-local WIDTH, HEIGHT = 680, 470
-local PREFIX = "|cffffd100WhichClass:|r "
+local WIDTH, HEIGHT = 680, 490
 local WHITE = "Interface\\Buttons\\WHITE8X8"
+local MAX_ROLE_NAME = 30
 
 local frame
 local refreshGeneral, refreshCustomise
@@ -29,6 +29,14 @@ local function Button(parent, text, width)
 	return b
 end
 
+local function Checkbox(parent, label)
+	local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+	cb:SetSize(26, 26)
+	cb.label = Text(cb, "GameFontHighlight", label)
+	cb.label:SetPoint("LEFT", cb, "RIGHT", 4, 1)
+	return cb
+end
+
 -- A message that shows for a moment, then fades out.
 local function FlashText(parent)
 	local fs = Text(parent, "GameFontNormal")
@@ -50,21 +58,27 @@ local function FlashText(parent)
 	return fs
 end
 
+local function Trim(s)
+	return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
 ---------------------------------------------------------------------------
 -- General tab
 ---------------------------------------------------------------------------
 
-local GENERAL_OPTIONS = {
+local MAIN_OPTIONS = {
 	{ key = "enabled", label = "Show WhichClass in tooltips",
 	  desc = "The same as right-clicking the minimap button." },
 	{ key = "showLowerQuality", label = "Show lower quality ratings",
 	  desc = "When no spec has the item's stats as its top two, list the specs it's second best for, or warn that the stats are very low." },
-	{ key = "showOffHand", label = "Show off-hand items",
-	  desc = "Shields, off-hand weapons and held-in-off-hand items." },
-	{ key = "showTrinkets", label = "Show trinket ratings",
-	  desc = "Lists the Icy Veins tier (S, A, B...) for every spec that rates the trinket. Unrated trinkets are matched by their secondary stats, or show \"Not rated\" if they have none." },
-	{ key = "bindOnly", label = "Only Bind on Equip and Warbound items",
-	  desc = "Turn this off to see WhichClass on soulbound gear too, such as trinkets from dungeons and raids." },
+}
+
+local FILTER_OPTIONS = {
+	{ key = "showBoE", label = "Bind on Equip items" },
+	{ key = "showWarbound", label = "Warbound items", note = "including Warbound until equipped" },
+	{ key = "showSoulbound", label = "Soulbound items", note = "including dungeon and raid drops that bind when picked up" },
+	{ key = "showOffHand", label = "Off-hand items", note = "shields, off-hand weapons and held items" },
+	{ key = "showTrinkets", label = "Trinkets", note = "Icy Veins tier, or matched by stats if unrated" },
 }
 
 local function SetOption(key, value)
@@ -78,22 +92,42 @@ end
 
 local function BuildGeneral(page)
 	local checks = {}
-	local y = -8
-	for _, option in ipairs(GENERAL_OPTIONS) do
-		local cb = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-		cb:SetSize(26, 26)
-		cb:SetPoint("TOPLEFT", 12, y)
-		local label = Text(cb, "GameFontHighlight", option.label)
-		label:SetPoint("LEFT", cb, "RIGHT", 4, 1)
-		local desc = Text(cb, "GameFontDisableSmall", option.desc)
-		desc:SetPoint("TOPLEFT", label, "BOTTOMLEFT", 0, -3)
-		desc:SetWidth(WIDTH - 110)
+	local function Track(cb, key)
+		cb.key = key
 		cb:SetScript("OnClick", function(self)
-			SetOption(option.key, self:GetChecked() and true or false)
+			SetOption(key, self:GetChecked() and true or false)
 		end)
-		cb.key = option.key
 		checks[#checks + 1] = cb
+	end
+
+	local y = -8
+	for _, option in ipairs(MAIN_OPTIONS) do
+		local cb = Checkbox(page, option.label)
+		cb:SetPoint("TOPLEFT", 12, y)
+		local desc = Text(cb, "GameFontDisableSmall", option.desc)
+		desc:SetPoint("TOPLEFT", cb.label, "BOTTOMLEFT", 0, -3)
+		desc:SetWidth(WIDTH - 110)
+		Track(cb, option.key)
 		y = y - 58
+	end
+
+	local heading = Text(page, "GameFontNormal", "Only show tooltip for:")
+	heading:SetPoint("TOPLEFT", 16, y - 4)
+	local headingNote = Text(page, "GameFontDisableSmall",
+		"WhichClass only appears on items whose binding is ticked here. Off-hand items and trinkets can be switched off too.")
+	headingNote:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -3)
+	headingNote:SetWidth(WIDTH - 60)
+	y = y - 44
+
+	for _, option in ipairs(FILTER_OPTIONS) do
+		local cb = Checkbox(page, option.label)
+		cb:SetPoint("TOPLEFT", 30, y)
+		if option.note then
+			local note = Text(cb, "GameFontDisableSmall", "(" .. option.note .. ")")
+			note:SetPoint("LEFT", cb.label, "RIGHT", 8, 0)
+		end
+		Track(cb, option.key)
+		y = y - 30
 	end
 
 	local reset = Button(page, "Restore default settings", 190)
@@ -108,7 +142,7 @@ local function BuildGeneral(page)
 		flash:Flash("Settings restored", 0.2, 1, 0.2)
 	end)
 
-	local source = Text(page, "GameFontDisableSmall", "Stat priorities and trinket ratings from Icy Veins, patch 12.1.5. Your custom stat priorities are on the Customise tab.")
+	local source = Text(page, "GameFontDisableSmall", "Stat priorities and trinket ratings from Icy Veins, patch 12.1.5. Your own stat priorities and roles are on the Customise tab.")
 	source:SetPoint("BOTTOMLEFT", reset, "TOPLEFT", 0, 10)
 	source:SetWidth(WIDTH - 60)
 
@@ -127,7 +161,8 @@ local SLOT_W, SLOT_H, GAP = 118, 34, 52
 
 local selected = { class = nil, spec = nil, build = nil }
 local state = { order = {}, seps = {} } -- what the row shows right now
-local savedText                           -- what the build uses, for spotting unsaved changes
+local savedText                           -- what the role uses, for spotting unsaved changes
+local hideRoleEditor                      -- set once the page is built
 
 -- ">=" counts as ">" in the tooltip, so the editor only offers > and =.
 local function EditorSeps(seps)
@@ -149,21 +184,27 @@ local function SpecsOf(classFile)
 	return list
 end
 
-local function SpecHasCustom(spec)
+-- True if the spec has a changed priority or a custom role (shown as *).
+local function SpecHasChanges(spec)
 	for _, build in ipairs(spec.builds) do
-		if build.custom then return true end
+		if build.custom or build.isRole then return true end
 	end
 	return false
 end
 
-local function ClassHasCustom(classFile)
+local function ClassHasChanges(classFile)
 	for _, spec in ipairs(SpecsOf(classFile)) do
-		if SpecHasCustom(spec) then return true end
+		if SpecHasChanges(spec) then return true end
 	end
 	return false
+end
+
+local function RoleName(build)
+	return build.label or "Default"
 end
 
 local function LoadBuild(build)
+	if hideRoleEditor then hideRoleEditor() end
 	selected.build = build
 	local parsed = ns.ParseStats(build.text)
 	state.order = { unpack(parsed.order) }
@@ -208,22 +249,27 @@ local function IsDirty()
 	return ns.FormatStats(state.order, state.seps) ~= savedText
 end
 
+local function Dropdown(parent, width, label)
+	local dd = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+	dd:SetWidth(width)
+	local text = Text(parent, "GameFontNormalSmall", label)
+	text:SetPoint("BOTTOMLEFT", dd, "TOPLEFT", 2, 3)
+	return dd
+end
+
 local function BuildCustomise(page)
 	local intro = Text(page, "GameFontHighlightSmall",
-		"Pick a spec, drag the stat boxes into your order, and choose > (better than) or = (equal to) between them. Changes only apply when you press Save.")
+		"Pick a role, drag the stat boxes into your order, and choose > (better than) or = (equal to) between them. Changes only apply when you press Save. Use New role to add your own.")
 	intro:SetPoint("TOPLEFT", 14, -6)
 	intro:SetWidth(WIDTH - 60)
 
-	-- Class, spec and build pickers
-	local classDD = CreateFrame("DropdownButton", nil, page, "WowStyle1DropdownTemplate")
-	classDD:SetWidth(170)
-	classDD:SetPoint("TOPLEFT", 14, -44)
-	local specDD = CreateFrame("DropdownButton", nil, page, "WowStyle1DropdownTemplate")
-	specDD:SetWidth(170)
+	-- Class, spec and role pickers, each with a label above it
+	local classDD = Dropdown(page, 150, "Class")
+	classDD:SetPoint("TOPLEFT", 14, -58)
+	local specDD = Dropdown(page, 150, "Spec")
 	specDD:SetPoint("LEFT", classDD, "RIGHT", 12, 0)
-	local buildDD = CreateFrame("DropdownButton", nil, page, "WowStyle1DropdownTemplate")
-	buildDD:SetWidth(190)
-	buildDD:SetPoint("LEFT", specDD, "RIGHT", 12, 0)
+	local roleDD = Dropdown(page, 190, "Role")
+	roleDD:SetPoint("LEFT", specDD, "RIGHT", 12, 0)
 
 	classDD:SetupMenu(function(_, root)
 		local classes = {}
@@ -232,7 +278,7 @@ local function BuildCustomise(page)
 		end
 		table.sort(classes, function(a, b) return a.name < b.name end)
 		for _, class in ipairs(classes) do
-			local text = ClassColored(class.file, class.name) .. (ClassHasCustom(class.file) and " |cffffd100*|r" or "")
+			local text = ClassColored(class.file, class.name) .. (ClassHasChanges(class.file) and " |cffffd100*|r" or "")
 			root:CreateRadio(text,
 				function(file) return selected.class == file end,
 				function(file) SelectClass(file) end,
@@ -242,7 +288,7 @@ local function BuildCustomise(page)
 
 	specDD:SetupMenu(function(_, root)
 		for _, spec in ipairs(SpecsOf(selected.class)) do
-			local text = ClassColored(spec.class, spec.spec) .. (SpecHasCustom(spec) and " |cffffd100*|r" or "")
+			local text = ClassColored(spec.class, spec.spec) .. (SpecHasChanges(spec) and " |cffffd100*|r" or "")
 			root:CreateRadio(text,
 				function(s) return selected.spec == s end,
 				function(s) SelectSpec(s) end,
@@ -250,35 +296,74 @@ local function BuildCustomise(page)
 		end
 	end)
 
-	buildDD:SetupMenu(function(_, root)
+	roleDD:SetupMenu(function(_, root)
 		if not selected.spec then return end
 		for _, build in ipairs(selected.spec.builds) do
-			root:CreateRadio((build.label or "Default") .. (build.custom and " |cffffd100*|r" or ""),
+			local text = RoleName(build)
+			if build.isRole then
+				text = text .. " |cff66ccff(yours)|r"
+			elseif build.custom then
+				text = text .. " |cffffd100*|r"
+			end
+			root:CreateRadio(text,
 				function(b) return selected.build == b end,
 				function(b) LoadBuild(b) end,
 				build)
 		end
 	end)
 
-	local legend = Text(page, "GameFontDisableSmall", "|cffffd100*|r = has a custom priority")
-	legend:SetPoint("TOPLEFT", classDD, "BOTTOMLEFT", 2, -6)
+	local legend = Text(page, "GameFontDisableSmall", "|cffffd100*|r = has your changes")
+	legend:SetPoint("TOPLEFT", classDD, "BOTTOMLEFT", 2, -8)
+
+	-- New role / Delete role, and the name box that New role opens
+	local newRole = Button(page, "New role", 92)
+	newRole:SetPoint("TOPLEFT", roleDD, "BOTTOMLEFT", 0, -4)
+	local deleteRole = Button(page, "Delete role", 92)
+	deleteRole:SetPoint("LEFT", newRole, "RIGHT", 6, 0)
+
+	local nameBox = CreateFrame("EditBox", nil, page, "InputBoxTemplate")
+	nameBox:SetSize(150, 20)
+	nameBox:SetPoint("TOPLEFT", roleDD, "BOTTOMLEFT", 6, -6)
+	nameBox:SetAutoFocus(false)
+	nameBox:SetMaxLetters(MAX_ROLE_NAME)
+	local nameLabel = Text(page, "GameFontNormalSmall", "New role name:")
+	nameLabel:SetPoint("RIGHT", nameBox, "LEFT", -10, 0)
+	local create = Button(page, "Create", 64)
+	create:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
+	local cancel = Button(page, "Cancel", 64)
+	cancel:SetPoint("LEFT", create, "RIGHT", 4, 0)
+	local editorParts = { nameBox, nameLabel, create, cancel }
+
+	local function ShowRoleEditor(show)
+		for _, part in ipairs(editorParts) do part:SetShown(show) end
+		newRole:SetShown(not show)
+		deleteRole:SetShown(not show)
+		legend:SetShown(not show)
+		if show then
+			nameBox:SetText("")
+			nameBox:SetFocus()
+		else
+			nameBox:ClearFocus()
+		end
+	end
+	hideRoleEditor = function() ShowRoleEditor(false) end
+	ShowRoleEditor(false)
 
 	-- The stat row: four slots, a box per stat sitting in a slot, and a
 	-- > / = picker between each pair of slots.
 	local row = CreateFrame("Frame", nil, page, "BackdropTemplate")
 	local rowWidth = 4 * SLOT_W + 3 * GAP
 	row:SetSize(rowWidth + 20, SLOT_H + 64)
-	row:SetPoint("TOP", page, "TOP", 0, -112)
+	row:SetPoint("TOP", page, "TOP", 0, -128)
 	row:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
 	row:SetBackdropColor(0, 0, 0, 0.25)
 	row:SetBackdropBorderColor(0.3, 0.3, 0.35, 1)
 
-	-- Green outline that flashes around the row when a priority is saved.
+	-- Outline that flashes around the row when something is saved.
 	local glow = CreateFrame("Frame", nil, row, "BackdropTemplate")
 	glow:SetPoint("TOPLEFT", -3, 3)
 	glow:SetPoint("BOTTOMRIGHT", 3, -3)
 	glow:SetBackdrop({ edgeFile = WHITE, edgeSize = 2 })
-	glow:SetBackdropBorderColor(0.2, 1, 0.2, 1)
 	glow:SetAlpha(0)
 	local glowGroup = glow:CreateAnimationGroup()
 	local glowFade = glowGroup:CreateAnimation("Alpha")
@@ -390,52 +475,107 @@ local function BuildCustomise(page)
 
 	local save = Button(page, "Save", 110)
 	save:SetPoint("BOTTOMLEFT", 12, 10)
-	local resetSpec = Button(page, "Reset to default", 140)
-	resetSpec:SetPoint("LEFT", save, "RIGHT", 8, 0)
+	local resetRole = Button(page, "Reset to default", 140)
+	resetRole:SetPoint("LEFT", save, "RIGHT", 8, 0)
 	local resetAll = Button(page, "Reset all specs", 140)
 	resetAll:SetPoint("BOTTOMRIGHT", -12, 10)
 	local flash = FlashText(page)
-	flash:SetPoint("LEFT", resetSpec, "RIGHT", 12, 0)
+	flash:SetPoint("LEFT", resetRole, "RIGHT", 12, 0)
 
-	local function Applied(message)
+	local function Done(message, build)
 		ns.ClearCache()
-		LoadBuild(selected.build)
+		LoadBuild(build or selected.build)
 		flash:Flash(message, 0.2, 1, 0.2)
 		Glow(0.2, 1, 0.2)
+	end
+
+	local function Problem(message)
+		flash:Flash(message, 1, 0.35, 0.35)
 	end
 
 	save:SetScript("OnClick", function()
 		local build = selected.build
 		local text = ns.FormatStats(state.order, state.seps)
-		if text == EditorText(build.defaultText) then
+		if build.isRole then
+			ns.SaveRole(selected.spec, build, text)
+		elseif text == EditorText(build.defaultText) then
 			ns.db.custom[build.key] = nil
 			ns.SetBuildPriority(build, nil)
 		else
 			ns.db.custom[build.key] = text
 			ns.SetBuildPriority(build, text)
 		end
-		Applied("Saved")
+		Done("Saved")
 	end)
 
-	resetSpec:SetScript("OnClick", function()
+	-- For Icy Veins roles this goes back to the Icy Veins priority; for your
+	-- own roles it undoes unsaved changes.
+	resetRole:SetScript("OnClick", function()
 		local build = selected.build
+		if build.isRole then
+			LoadBuild(build)
+			flash:Flash("Changes undone", 0.2, 1, 0.2)
+			return
+		end
 		ns.db.custom[build.key] = nil
 		ns.SetBuildPriority(build, nil)
-		Applied("Reset to default")
+		Done("Reset to default")
+	end)
+
+	-- New roles start as a copy of whatever the row shows now.
+	local function CreateRole()
+		local name = Trim(nameBox:GetText() or "")
+		if name == "" then
+			Problem("Type a name for the role")
+		elseif name:find("|", 1, true) then
+			Problem("Role names can't contain |")
+		elseif ns.RoleNameTaken(selected.spec, name) then
+			Problem("This spec already has a role called " .. name)
+		else
+			local build = ns.AddRole(selected.spec, name, ns.FormatStats(state.order, state.seps))
+			Done("Role created", build)
+		end
+	end
+	newRole:SetScript("OnClick", function() ShowRoleEditor(true) end)
+	create:SetScript("OnClick", CreateRole)
+	cancel:SetScript("OnClick", function() ShowRoleEditor(false) end)
+	nameBox:SetScript("OnEnterPressed", CreateRole)
+	nameBox:SetScript("OnEscapePressed", function() ShowRoleEditor(false) end)
+
+	StaticPopupDialogs.WHICHCLASS_DELETE_ROLE = {
+		text = "Delete your role \"%s\" for %s?",
+		button1 = YES,
+		button2 = NO,
+		OnAccept = function(_, data)
+			ns.RemoveRole(data.spec, data.build)
+			if selected.spec == data.spec then
+				Done("Role deleted", data.spec.builds[1])
+			end
+		end,
+		timeout = 0,
+		whileDead = true,
+		hideOnEscape = true,
+		preferredIndex = 3,
+	}
+	deleteRole:SetScript("OnClick", function()
+		local spec, build = selected.spec, selected.build
+		StaticPopup_Show("WHICHCLASS_DELETE_ROLE", build.label,
+			spec.spec .. " " .. ns.ClassGear[spec.class].name, { spec = spec, build = build })
 	end)
 
 	StaticPopupDialogs.WHICHCLASS_RESET_ALL = {
-		text = "Reset every spec to the Icy Veins stat priority?\nAll your custom priorities will be removed.",
+		text = "Reset every spec to the Icy Veins stat priority?\nAll your custom priorities and roles will be removed.",
 		button1 = YES,
 		button2 = NO,
 		OnAccept = function()
 			wipe(ns.db.custom)
+			ns.RemoveAllRoles()
 			for _, spec in ipairs(ns.Specs) do
 				for _, build in ipairs(spec.builds) do
 					ns.SetBuildPriority(build, nil)
 				end
 			end
-			Applied("All specs reset")
+			Done("All specs reset", selected.spec.builds[1])
 		end,
 		timeout = 0,
 		whileDead = true,
@@ -450,10 +590,9 @@ local function BuildCustomise(page)
 		local build = selected.build
 		if not build then return end
 
-		buildDD:SetShown(#selected.spec.builds > 1)
 		classDD:GenerateMenu()
 		specDD:GenerateMenu()
-		buildDD:GenerateMenu()
+		roleDD:GenerateMenu()
 
 		-- Put each stat's box in its slot and show how the tooltip will
 		-- treat that position with the current separators.
@@ -474,14 +613,22 @@ local function BuildCustomise(page)
 
 		local dirty = IsDirty()
 		local name = ClassColored(selected.spec.class, selected.spec.spec .. " " .. ns.ClassGear[selected.spec.class].name)
-		if build.label then name = name .. " (" .. build.label .. ")" end
-		local using = build.custom and "|cff33ff33using your custom priority|r" or "using the Icy Veins default"
+		name = name .. " (" .. RoleName(build) .. ")"
+		local using
+		if build.isRole then
+			using = "|cff66ccffone of your roles|r"
+			default:SetText("You made this role, so it has no Icy Veins default. Delete role removes it.")
+		else
+			using = build.custom and "|cff33ff33using your custom priority|r" or "using the Icy Veins default"
+			default:SetText("Icy Veins default: " .. build.defaultText)
+		end
 		status:SetText(name .. " is " .. using .. (dirty and "   |cffffaa00Unsaved changes|r" or ""))
-		default:SetText("Icy Veins default: " .. build.defaultText)
 
 		save:SetEnabled(dirty)
-		resetSpec:SetEnabled(build.custom or dirty)
-		resetAll:SetEnabled(next(ns.db.custom) ~= nil)
+		resetRole:SetText(build.isRole and "Undo changes" or "Reset to default")
+		resetRole:SetEnabled(build.custom or dirty)
+		deleteRole:SetEnabled(build.isRole == true)
+		resetAll:SetEnabled(next(ns.db.custom) ~= nil or next(ns.db.roles) ~= nil)
 	end
 end
 

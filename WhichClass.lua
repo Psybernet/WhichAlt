@@ -13,7 +13,9 @@ ns.DEFAULTS = {
 	showLowerQuality = true, -- "second best" and "very low" lines
 	showOffHand = true,      -- shields, off-hand weapons and held-in-off-hand items
 	showTrinkets = true,     -- trinket ratings
-	bindOnly = true,         -- only Bind on Equip and Warbound items
+	showBoE = true,          -- Bind on Equip (and Bind on Use) items
+	showWarbound = true,     -- Warbound and Warbound until equipped items
+	showSoulbound = false,   -- Soulbound and Bind on Pickup items
 }
 
 ---------------------------------------------------------------------------
@@ -129,13 +131,16 @@ local function MatchSpec(spec, stats)
 	end
 	if not best then return end
 
+	-- A spec with one Icy Veins priority has no build name; once it has a
+	-- custom role too, that priority shows as "Default".
 	local labels, seen, matched = {}, {}, 0
 	for i, build in ipairs(spec.builds) do
 		if tiers[i] == best then
 			matched = matched + 1
-			if build.label and not seen[build.label] then
-				seen[build.label] = true
-				labels[#labels + 1] = build.label
+			local label = build.label or (#spec.builds > 1 and "Default")
+			if label and not seen[label] then
+				seen[label] = true
+				labels[#labels + 1] = label
 			end
 		end
 	end
@@ -279,28 +284,28 @@ end
 -- Tooltip
 ---------------------------------------------------------------------------
 
--- Binding lines that mean the item can still be traded or sent to an alt.
--- Soulbound items (including BoE gear once equipped) are left alone.
-local TRADABLE_BINDS = {}
-for _, key in ipairs({
-	"ITEM_BIND_ON_EQUIP",            -- Binds when equipped
-	"ITEM_ACCOUNTBOUND",             -- Warbound
-	"ITEM_ACCOUNTBOUND_UNTIL_EQUIP", -- Warbound until equipped
-	"ITEM_BNETACCOUNTBOUND",
-	"ITEM_BIND_TO_ACCOUNT",
-	"ITEM_BIND_TO_BNETACCOUNT",
-	"ITEM_BIND_TO_ACCOUNT_UNTIL_EQUIP",
-}) do
-	if _G[key] then TRADABLE_BINDS[_G[key]] = true end
-end
-
-local function IsTradableBind(data)
-	for _, line in ipairs(data.lines or {}) do
-		if line.leftText and TRADABLE_BINDS[line.leftText] then
-			return true
-		end
+-- Tooltip binding lines, grouped by the "Only show tooltip for" option that
+-- covers them. BoE gear that has been equipped shows "Soulbound".
+local BIND_OPTION = {}
+local function Binds(option, ...)
+	for i = 1, select("#", ...) do
+		local text = _G[select(i, ...)]
+		if text then BIND_OPTION[text] = option end
 	end
-	return false
+end
+Binds("showBoE", "ITEM_BIND_ON_EQUIP", "ITEM_BIND_ON_USE")
+Binds("showWarbound", "ITEM_ACCOUNTBOUND", "ITEM_ACCOUNTBOUND_UNTIL_EQUIP", "ITEM_BNETACCOUNTBOUND",
+	"ITEM_BIND_TO_ACCOUNT", "ITEM_BIND_TO_BNETACCOUNT", "ITEM_BIND_TO_ACCOUNT_UNTIL_EQUIP")
+Binds("showSoulbound", "ITEM_SOULBOUND", "ITEM_BIND_ON_PICKUP", "ITEM_BIND_QUEST")
+
+-- Returns the option that covers this item's binding. Items with no binding
+-- line can be traded freely, so they count as Bind on Equip.
+local function GetBindOption(data)
+	for _, line in ipairs(data.lines or {}) do
+		local option = line.leftText and BIND_OPTION[line.leftText]
+		if option then return option end
+	end
+	return "showBoE"
 end
 
 local function OnTooltipItem(tooltip, data)
@@ -314,10 +319,8 @@ local function OnTooltipItem(tooltip, data)
 	if equipLoc == "INVTYPE_TRINKET" and not db.showTrinkets then return end
 	if OFF_HAND_SLOTS[equipLoc] and not db.showOffHand then return end
 
-	if db.bindOnly then
-		local okBind, tradable = pcall(IsTradableBind, data)
-		if not okBind or not tradable then return end
-	end
+	local okBind, bindOption = pcall(GetBindOption, data)
+	if not okBind or not db[bindOption] then return end
 
 	local ok, lines = pcall(GetCachedLines, link, itemID, classID, subclassID, equipLoc)
 	if not ok or not lines or #lines == 0 then return end
@@ -435,11 +438,15 @@ loader:SetScript("OnEvent", function(self, _, name)
 
 	WhichClassDB = WhichClassDB or {}
 	ns.db = WhichClassDB
+	-- Older versions had one "Only Bind on Equip and Warbound items" option.
+	if ns.db.bindOnly == false then ns.db.showSoulbound = true end
+	ns.db.bindOnly = nil
 	for key, value in pairs(ns.DEFAULTS) do
 		if ns.db[key] == nil then ns.db[key] = value end
 	end
 	ns.db.minimapAngle = ns.db.minimapAngle or 225
 	ns.db.custom = ns.db.custom or {}
+	ns.db.roles = ns.db.roles or {}
 
 	-- Apply saved custom stat priorities. Drop any that no longer parse.
 	for _, spec in ipairs(ns.Specs) do
@@ -451,6 +458,7 @@ loader:SetScript("OnEvent", function(self, _, name)
 			end
 		end
 	end
+	ns.LoadRoles()
 
 	UpdatePosition()
 	ns.UpdateMinimapButton()
