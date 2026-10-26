@@ -22,7 +22,7 @@ end
 -- What each class can equip. Shields are tracked separately from other armor.
 ns.ClassGear = {
 	DEATHKNIGHT = { name = "Death Knight", armor = PLATE, weapons = set(AXE1H, AXE2H, MACE1H, MACE2H, POLEARM, SWORD1H, SWORD2H) },
-	DEMONHUNTER = { name = "Demon Hunter", armor = LEATHER, weapons = set(WARGLAIVE, AXE1H, FIST, SWORD1H) },
+	DEMONHUNTER = { name = "Demon Hunter", armor = LEATHER, weapons = set(WARGLAIVE, AXE1H, FIST, SWORD1H, DAGGER) },
 	DRUID       = { name = "Druid", armor = LEATHER, weapons = set(DAGGER, FIST, MACE1H, MACE2H, POLEARM, STAFF) },
 	EVOKER      = { name = "Evoker", armor = MAIL, weapons = set(DAGGER, FIST, AXE1H, AXE2H, MACE1H, MACE2H, SWORD1H, SWORD2H, STAFF) },
 	HUNTER      = { name = "Hunter", armor = MAIL, weapons = set(BOW, GUN, CROSSBOW, AXE1H, AXE2H, POLEARM, STAFF, SWORD1H, SWORD2H, FIST, DAGGER) },
@@ -192,6 +192,51 @@ for _, cols in ipairs(EachRow(ns.SpecText, 5, "SpecData.lua")) do
 end
 
 ---------------------------------------------------------------------------
+-- Weapon rules (WeaponData.lua)
+--   spec.weaponBuilds = { { label, weapons = { [subclassID] = true }, shield, holdable } }
+-- Specs with no rows here fall back to what their class can equip.
+---------------------------------------------------------------------------
+
+local WEAPON_TYPES = {
+	["1h axe"] = AXE1H, ["2h axe"] = AXE2H, ["1h mace"] = MACE1H, ["2h mace"] = MACE2H,
+	["1h sword"] = SWORD1H, ["2h sword"] = SWORD2H, ["polearm"] = POLEARM, ["staff"] = STAFF,
+	["dagger"] = DAGGER, ["fist weapon"] = FIST, ["warglaive"] = WARGLAIVE,
+	["bow"] = BOW, ["gun"] = GUN, ["crossbow"] = CROSSBOW, ["wand"] = WAND,
+}
+
+for _, cols in ipairs(EachRow(ns.WeaponText, 4, "WeaponData.lua")) do
+	local className, specName, buildName, weaponText = unpack(cols)
+	local classFile = CLASS_FILES[className:lower()]
+	local spec = classFile and specsByKey[classFile .. ":" .. specName:lower()]
+
+	if not classFile then
+		Problem("WeaponData.lua", cols.line, "unknown class '" .. className .. "'")
+	elseif not spec then
+		Problem("WeaponData.lua", cols.line, "no spec '" .. specName .. "' for " .. className .. " in SpecData.lua")
+	else
+		local rule = { label = buildName ~= "-" and buildName ~= "" and buildName or nil, weapons = {} }
+		local ok = true
+		for name in (weaponText .. ","):gmatch("([^,]*),") do
+			local key = trim(name):lower()
+			if key == "shield" then
+				rule.shield = true
+			elseif key == "off-hand item" then
+				rule.holdable = true
+			elseif WEAPON_TYPES[key] then
+				rule.weapons[WEAPON_TYPES[key]] = true
+			elseif key ~= "" then
+				Problem("WeaponData.lua", cols.line, "unknown weapon '" .. trim(name) .. "'")
+				ok = false
+			end
+		end
+		if ok then
+			spec.weaponBuilds = spec.weaponBuilds or {}
+			table.insert(spec.weaponBuilds, rule)
+		end
+	end
+end
+
+---------------------------------------------------------------------------
 -- Trinkets (TrinketData.lua)
 --   ns.Trinkets[itemID] = { { spec, content, tier }, ... }
 ---------------------------------------------------------------------------
@@ -325,7 +370,8 @@ function ns.GetDataStatus()
 	local game = GetBuildInfo and GetBuildInfo()
 	local gamePatch = PatchNumber(game)
 	local lines, outdated = {}, false
-	for _, entry in ipairs({ { "Stat priorities", ns.SpecDataInfo }, { "Trinket ratings", ns.TrinketDataInfo } }) do
+	for _, entry in ipairs({ { "Stat priorities", ns.SpecDataInfo }, { "Trinket ratings", ns.TrinketDataInfo },
+		{ "Weapon rules", ns.WeaponDataInfo } }) do
 		local label, info = entry[1], entry[2] or {}
 		local dataPatch = PatchNumber(info.patch)
 		local old = gamePatch and dataPatch and dataPatch < gamePatch

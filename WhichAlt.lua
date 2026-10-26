@@ -89,6 +89,41 @@ local function CanEquip(gear, classID, subclassID, equipLoc)
 	return true
 end
 
+-- Weapons, shields and held-in-off-hand items follow the spec's weapon rules
+-- (WeaponData.lua). Returns whether the spec uses the item, plus the weapon
+-- build name to show when only some of its builds do ("Dual Wield").
+local function WeaponFit(spec, gear, classID, subclassID, equipLoc)
+	local builds = spec.weaponBuilds
+	if not builds then
+		return CanEquip(gear, classID, subclassID, equipLoc)
+	end
+	local labels, matched = {}, 0
+	for _, build in ipairs(builds) do
+		local uses
+		if equipLoc == "INVTYPE_SHIELD" or (classID == ARMOR and subclassID == ARMOR_SHIELD) then
+			uses = build.shield
+		elseif equipLoc == "INVTYPE_HOLDABLE" then
+			uses = build.holdable
+		else
+			uses = build.weapons[subclassID]
+		end
+		if uses then
+			matched = matched + 1
+			labels[#labels + 1] = build.label
+		end
+	end
+	if matched == 0 then
+		return false
+	elseif matched == #builds or #labels == 0 then
+		return true
+	end
+	return true, table.concat(labels, ", ")
+end
+
+local function IsWeaponSlot(classID, equipLoc)
+	return classID == WEAPON or equipLoc == "INVTYPE_SHIELD" or equipLoc == "INVTYPE_HOLDABLE"
+end
+
 -- Returns a set of the primary stats on the item, or nil if it has none
 -- (jewelry and some trinkets), in which case any spec can use it.
 local function GetPrimaries(stats)
@@ -233,15 +268,26 @@ local function GetMatchLines(link, itemID, classID, subclassID, equipLoc)
 	end
 
 	local primaries = GetPrimaries(stats)
+	local isWeapon = IsWeaponSlot(classID, equipLoc)
 	local top, second = {}, {}
 	for _, spec in ipairs(ns.Specs) do
 		local gear = ns.ClassGear[spec.class]
-		if (not primaries or primaries[spec.primary]) and CanEquip(gear, classID, subclassID, equipLoc) then
+		local fits, weaponLabel
+		if not primaries or primaries[spec.primary] then
+			if isWeapon then
+				fits, weaponLabel = WeaponFit(spec, gear, classID, subclassID, equipLoc)
+			else
+				fits = CanEquip(gear, classID, subclassID, equipLoc)
+			end
+		end
+		if fits then
 			local tier, label = MatchSpec(spec, stats)
 			if tier then
 				local text = SpecName(spec)
-				if label then
-					text = text .. " (" .. label .. ")"
+				if label and weaponLabel then
+					text = text .. " (" .. label .. ", " .. weaponLabel .. ")"
+				elseif label or weaponLabel then
+					text = text .. " (" .. (label or weaponLabel) .. ")"
 				end
 				local list = tier == TOP and top or second
 				list[#list + 1] = ColorByClass(spec.class, text)

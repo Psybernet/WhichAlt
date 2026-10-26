@@ -13,7 +13,7 @@ Stat priorities and trinket ratings come from [Icy Veins](https://www.icy-veins.
 ## Features
 
 - **Spec matches in the tooltip**, in class colours. When a spec has different priorities for different builds (hero talents, Raid vs Mythic+, survivability vs damage), the matching build is shown in brackets, such as *Brewmaster Monk (Survivability build)*.
-- **Only specs that can use the item**: it checks armor type, weapon type, shields and the item's main stat (Strength, Agility or Intellect).
+- **Only specs that can use the item**: it checks armor type and the item's main stat (Strength, Agility or Intellect), and weapons, shields and off-hand items follow each spec's own weapon rules. A polearm won't suggest Marksmanship Hunter, and specs that fight in two styles show which one fits, such as *Frost Death Knight (Dual Wield)*.
 - **Second best and very low ratings**: when no spec has the item's stats as its top two, it lists the specs it's second best for, or warns that the stats are very low for everyone.
 - **Trinket ratings**: the Icy Veins tier (S, A, B…) for every spec that rates the trinket.
 - **Settings window** to turn each part on or off.
@@ -99,7 +99,8 @@ The data is kept in readable tables so it's easy to update when Icy Veins change
 |---|---|
 | [`SpecData.lua`](SpecData.lua) | Each spec's main stat and secondary stat priority, with notes on the format at the top |
 | [`TrinketData.lua`](TrinketData.lua) | Trinket tiers per spec, matched by item ID so it works in every game language |
-| [`Data.lua`](Data.lua) | Which armor and weapon types each class can use |
+| [`WeaponData.lua`](WeaponData.lua) | Which weapons, shields and off-hand items each spec uses, with separate builds for specs that can fight two-handed or dual wield |
+| [`Data.lua`](Data.lua) | Which armor each class can wear |
 
 If a row in `SpecData.lua` or `TrinketData.lua` has a mistake, WhichAlt prints the row in chat when you log in.
 

@@ -2,6 +2,16 @@
 
 All notable changes to WhichAlt. Versions follow [semantic versioning](https://semver.org/): the last number for fixes, the middle one for new features, the first for big changes.
 
+## [1.4.0] - 2026-10-26
+
+### Added
+- Weapon rules per spec (`WeaponData.lua`): weapons, shields and off-hand items only list specs that actually use them, checked against the Icy Veins best-in-slot pages. For example, a polearm no longer suggests Marksmanship Hunter, and Agility daggers only suggest Assassination, Outlaw and dual-wield Survival.
+- Specs that can fight two-handed or dual wield (Frost Death Knight, Survival Hunter, Brewmaster Monk) show which style fits in brackets, such as *Frost Death Knight (Dual Wield)*.
+- Weapon rules appear in the data status at the bottom of Settings → General.
+
+### Fixed
+- Devourer Demon Hunters can now be suggested for daggers.
+
 ## [1.3.0] - 2026-10-26
 
 ### Added
