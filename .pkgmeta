@@ -1,0 +1,14 @@
+# Packaging rules for the BigWigs packager (used by .github/workflows/release.yml
+# and by CurseForge). The zip contains a single WhichAlt folder.
+package-as: WhichAlt
+
+# Files only needed for development, not in the game.
+ignore:
+  - images
+  - tools
+  - README.md
+
+# Release notes on GitHub (and CurseForge) come from this file.
+manual-changelog:
+  filename: CHANGELOG.md
+  markup-type: markdown

@@ -6,6 +6,9 @@ local PREFIX = "|cffffd100WhichAlt:|r "
 
 local GetItemStats = C_Item and C_Item.GetItemStats or GetItemStats
 local GetItemInfoInstant = C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
+local GetAddOnMetadata = C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata
+
+ns.VERSION = GetAddOnMetadata and GetAddOnMetadata(addonName, "Version") or "?"
 
 -- Saved settings. Anything missing from WhichAltDB falls back to these.
 ns.DEFAULTS = {
@@ -386,7 +389,7 @@ end)
 
 local function ShowButtonTooltip(self)
 	GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-	GameTooltip:AddLine("WhichAlt", 1, 0.82, 0)
+	GameTooltip:AddDoubleLine("WhichAlt", ns.VERSION, 1, 0.82, 0, 0.6, 0.6, 0.6)
 	if ns.db.enabled then
 		GameTooltip:AddLine("Tooltips: |cff33ff33On|r", 1, 1, 1)
 	else
@@ -459,6 +462,13 @@ loader:SetScript("OnEvent", function(self, _, name)
 		end
 	end
 	ns.LoadRoles()
+
+	-- Once per game patch, mention in chat if the data is from an older one.
+	local _, outdated, game = ns.GetDataStatus()
+	if outdated and ns.db.outdatedNotice ~= game then
+		print(PREFIX .. "some stat data is from an older patch than the game (" .. game .. "). Check for a WhichAlt update.")
+		ns.db.outdatedNotice = game
+	end
 
 	UpdatePosition()
 	ns.UpdateMinimapButton()

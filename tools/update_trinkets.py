@@ -7,7 +7,9 @@ B, ...) and one or more columns (Raid / Mythic+, or hero talents). A trinket
 with the same tier in every column gets one row with Content "-"; otherwise
 it gets a row per column it appears in.
 """
+import datetime
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -65,10 +67,16 @@ def item_id(span):
     return ref.split("item/")[1].split("?")[0]
 
 
+patches = set()  # patch numbers seen in page titles, e.g. "12.1.5"
+
+
 def scrape(spec, cls, role):
     url = f"https://www.icy-veins.com/wow/{spec}-{cls}-pve-{role}-gear-best-in-slot"
     req = urllib.request.Request(url, headers={"User-Agent": UA})
     html = urllib.request.urlopen(req, timeout=30).read().decode("utf-8")
+    title = re.search(r"<title>(.*?)</title>", html, re.S)
+    if title:
+        patches.update(re.findall(r"\b(\d+\.\d+\.\d+)\b", title.group(1)))
     # html5lib parses like a browser; html.parser mis-nests some of these tables.
     table = BeautifulSoup(html, "html5lib").select_one("details.trinket-dropdown table")
     if table is None:
@@ -111,8 +119,15 @@ for spec, cls, role in SPECS:
         lines.append(f"{title(cls):<12} | {title(spec):<13} | {content:<15} | {tier:<9} | {tid:<7} | {name}")
     time.sleep(0.5)
 
+patch = max(patches, key=lambda v: tuple(int(n) for n in v.split(".")), default="unknown")
+info = (f'ns.TrinketDataInfo = {{ source = "Icy Veins", patch = "{patch}", '
+        f'updated = "{datetime.date.today().isoformat()}" }}\n')
+
 header = '''local _, ns = ...
 
+-- Written by tools/update_trinkets.py. The Settings window compares the
+-- patch with the game's.
+''' + info + '''
 --[[
 WhichAlt trinket ratings, from the Icy Veins "Best in Slot Gear" pages
 (trinket rankings table for each spec). Rebuild this file with:

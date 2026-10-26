@@ -22,10 +22,11 @@ Stat priorities and trinket ratings come from [Icy Veins](https://www.icy-veins.
 
 ## Installing
 
-1. Download the latest code: **Code → Download ZIP**.
-2. Extract it into `World of Warcraft\_retail_\Interface\AddOns\`.
-3. Rename the folder from `WhichAlt-main` to **`WhichAlt`**. The game only loads it if the folder name matches the `.toc` file.
-4. Restart the game, or type `/reload` if it was already running.
+1. Go to the [latest release](https://github.com/Psybernet/WhichAlt/releases/latest) and download **`WhichAlt-x.y.z.zip`** under *Assets*.
+2. Extract it into `World of Warcraft\_retail_\Interface\AddOns\`. You should end up with an `AddOns\WhichAlt` folder.
+3. Restart the game, or type `/reload` if it was already running.
+
+To try the newest unreleased changes instead, use **Code → Download ZIP** and rename the extracted folder from `WhichAlt-main` to **`WhichAlt`**. The game only loads it if the folder name matches the `.toc` file.
 
 A **WA** button on the minimap shows that it has loaded.
 
@@ -121,6 +122,27 @@ Redraw the reference image from `SpecData.lua`:
 ```bash
 python tools/make_reference.py
 ```
+
+## Releasing a new version
+
+Version numbers follow [semantic versioning](https://semver.org/): `1.3.1` for a fix, `1.4.0` for new features, `2.0.0` for big changes.
+
+1. Change `## Version:` in [`WhichAlt.toc`](WhichAlt.toc) to the new number.
+2. Add a section for it at the top of [`CHANGELOG.md`](CHANGELOG.md).
+3. Commit and push as usual.
+4. Tag the version and push the tag:
+
+   ```bash
+   git tag v1.4.0
+   ```
+
+   ```bash
+   git push origin v1.4.0
+   ```
+
+GitHub then builds `WhichAlt-1.4.0.zip` (just the addon folder, without the images and tools) and publishes it on the [Releases](https://github.com/Psybernet/WhichAlt/releases) page with the changelog as release notes. The build stops with an error if the tag and the `.toc` version don't match. You can follow it under the repository's **Actions** tab.
+
+**CurseForge:** once the project exists there, add its ID to `WhichAlt.toc` as `## X-Curse-Project-ID: 123456`, add a CurseForge API token as a repository secret named `CF_API_KEY`, and remove the `#` from the `CF_API_KEY` line in [`.github/workflows/release.yml`](.github/workflows/release.yml). Each tag will then upload to CurseForge too.
 
 ## Credits
 

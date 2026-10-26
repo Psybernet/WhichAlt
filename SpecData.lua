@@ -1,5 +1,9 @@
 local _, ns = ...
 
+-- Where this table came from. Update it when you refresh the data;
+-- the Settings window compares the patch with the game's.
+ns.SpecDataInfo = { source = "Icy Veins", patch = "12.1.5", updated = "2026-10-20" }
+
 --[[
 WhichAlt spec data. Edit the table below when stat priorities change.
 

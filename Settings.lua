@@ -142,14 +142,26 @@ local function BuildGeneral(page)
 		flash:Flash("Settings restored", 0.2, 1, 0.2)
 	end)
 
-	local source = Text(page, "GameFontDisableSmall", "Stat priorities and trinket ratings from Icy Veins, patch 12.1.5. Your own stat priorities and roles are on the Customise tab.")
-	source:SetPoint("BOTTOMLEFT", reset, "TOPLEFT", 0, 10)
-	source:SetWidth(WIDTH - 60)
+	-- Version and data status, e.g. "WhichAlt 1.3.0" then one line per data
+	-- file, then whether the data matches the game's patch.
+	local about = Text(page, "GameFontDisableSmall")
+	about:SetPoint("BOTTOMLEFT", reset, "TOPLEFT", 0, 12)
+	about:SetWidth(WIDTH - 60)
+	about:SetSpacing(3)
 
 	refreshGeneral = function()
 		for _, cb in ipairs(checks) do
 			cb:SetChecked(ns.db[cb.key])
 		end
+
+		local lines, outdated, game = ns.GetDataStatus()
+		table.insert(lines, 1, "|cffffd100WhichAlt " .. ns.VERSION .. "|r")
+		if outdated then
+			lines[#lines + 1] = "|cffffaa00Some data is from an older patch than the game (" .. game .. "). Check for a WhichAlt update.|r"
+		elseif game then
+			lines[#lines + 1] = "|cff33ff33Up to date for patch " .. game .. "|r"
+		end
+		about:SetText(table.concat(lines, "\n"))
 	end
 end
 

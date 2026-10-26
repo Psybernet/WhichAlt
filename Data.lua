@@ -297,3 +297,41 @@ function ns.RemoveAllRoles()
 	end
 	wipe(ns.db.roles)
 end
+
+---------------------------------------------------------------------------
+-- Data status, shown in Settings: where each data file came from, and
+-- whether it's older than the patch the game is on.
+---------------------------------------------------------------------------
+
+local MONTHS = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
+
+-- "12.1.5" -> 120105, so patches compare as numbers.
+local function PatchNumber(patch)
+	local major, minor, rev = tostring(patch or ""):match("^(%d+)%.(%d+)%.?(%d*)")
+	if not major then return nil end
+	return tonumber(major) * 10000 + tonumber(minor) * 100 + (tonumber(rev) or 0)
+end
+
+-- "2026-10-20" -> "20 Oct 2026"
+local function NiceDate(iso)
+	local y, m, d = tostring(iso or ""):match("^(%d+)-(%d+)-(%d+)$")
+	if not y or not MONTHS[tonumber(m)] then return iso or "unknown" end
+	return tonumber(d) .. " " .. MONTHS[tonumber(m)] .. " " .. y
+end
+
+-- Returns a line per data file, whether any of them is older than the
+-- game, and the game's patch.
+function ns.GetDataStatus()
+	local game = GetBuildInfo and GetBuildInfo()
+	local gamePatch = PatchNumber(game)
+	local lines, outdated = {}, false
+	for _, entry in ipairs({ { "Stat priorities", ns.SpecDataInfo }, { "Trinket ratings", ns.TrinketDataInfo } }) do
+		local label, info = entry[1], entry[2] or {}
+		local dataPatch = PatchNumber(info.patch)
+		local old = gamePatch and dataPatch and dataPatch < gamePatch
+		outdated = outdated or old
+		lines[#lines + 1] = ("%s: %s, patch %s, updated %s%s"):format(label, info.source or "unknown source",
+			info.patch or "?", NiceDate(info.updated), old and "  |cffffaa00(older than the game)|r" or "")
+	end
+	return lines, outdated, game
+end

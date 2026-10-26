@@ -1,5 +1,9 @@
 local _, ns = ...
 
+-- Written by tools/update_trinkets.py. The Settings window compares the
+-- patch with the game's.
+ns.TrinketDataInfo = { source = "Icy Veins", patch = "12.1.5", updated = "2026-10-20" }
+
 --[[
 WhichAlt trinket ratings, from the Icy Veins "Best in Slot Gear" pages
 (trinket rankings table for each spec). Rebuild this file with:

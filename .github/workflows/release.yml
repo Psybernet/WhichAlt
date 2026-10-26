@@ -1,0 +1,39 @@
+# Builds WhichAlt.zip and publishes a GitHub release whenever a version tag
+# such as v1.3.0 is pushed. See "Releasing a new version" in README.md.
+#
+# CurseForge later: create the project there, add its ID to WhichAlt.toc as
+# "## X-Curse-Project-ID: 123456", add a CurseForge API token as the
+# repository secret CF_API_KEY, and remove the # from the CF_API_KEY line
+# below. The same tag will then upload to CurseForge too.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the tag matches the version in WhichAlt.toc
+        run: |
+          toc=$(grep -m1 '^## Version:' WhichAlt.toc | sed 's/^## Version: *//' | tr -d '\r ')
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$toc" != "$tag" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match '## Version: $toc' in WhichAlt.toc"
+            exit 1
+          fi
+
+      - name: Package and publish
+        uses: BigWigsMods/packager@v2
+        env:
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+          # CF_API_KEY: ${{ secrets.CF_API_KEY }}

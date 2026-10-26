@@ -2,7 +2,7 @@
 ## Title: WhichAlt
 ## Notes: Shows which class and spec an item's secondary stats suit (stat priorities from Icy Veins, patch 12.1.5).
 ## Author: Martin Heine
-## Version: 1.2.0
+## Version: 1.3.0
 ## IconTexture: Interface\AddOns\WhichAlt\Media\WA
 ## SavedVariables: WhichAltDB
 
