@@ -220,7 +220,7 @@ for _, cols in ipairs(EachRow(ns.TrinketText, 6, "TrinketData.lua")) do
 end
 
 ---------------------------------------------------------------------------
--- Custom roles, made in the Customise tab and kept in WhichClassDB.roles:
+-- Custom roles, made in the Customise tab and kept in WhichAltDB.roles:
 --   roles["DRUID:Guardian"] = { { name = "Mythic+ AoE", text = "Haste > ..." } }
 -- Each one becomes an extra build on its spec, so the tooltip treats it
 -- like the Icy Veins builds.

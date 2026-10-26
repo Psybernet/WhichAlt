@@ -1,4 +1,4 @@
-"""Draws the WhichClass stat priority reference image from SpecData.lua.
+"""Draws the WhichAlt stat priority reference image from SpecData.lua.
 
 Usage: python tools/make_reference.py [SpecData.lua] [output.png]
 
@@ -64,7 +64,7 @@ H = TOP + 40 + len(rows) * ROW + groups * 10 + 70
 
 img = Image.new("RGB", (W, H), BG)
 d = ImageDraw.Draw(img)
-d.text((40, 30), "WhichClass", font=title, fill="#ffd100")
+d.text((40, 30), "WhichAlt", font=title, fill="#ffd100")
 d.text((40, 76), "Secondary stat priority by spec (best first)  \u00b7  Icy Veins, patch 12.1.5", font=reg, fill="#b8bccb")
 
 # Legend: stat colours, then what the box styles and separators mean.

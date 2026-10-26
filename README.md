@@ -1,13 +1,13 @@
-# <img src="images/icon.png" width="32" height="32" alt=""> WhichClass
+# <img src="images/icon.png" width="32" height="32" alt=""> WhichAlt
 
 A World of Warcraft addon that adds a short section to gear tooltips showing **which class and spec the item's secondary stats suit**. For example, a leather item with Haste and Versatility lists *Guardian Druid*, because those are its top two stats.
 
 Stat priorities and trinket ratings come from [Icy Veins](https://www.icy-veins.com/wow/) (patch 12.1.5, Midnight). You can override any spec's priority in the game.
 
 <p>
-  <img src="images/tooltip-match.jpg" alt="WhichClass tooltip section listing the specs that suit a pair of leather shoulders">
+  <img src="images/tooltip-match.jpg" alt="WhichAlt tooltip section listing the specs that suit a pair of leather shoulders">
   &nbsp;
-  <img src="images/tooltip-cloak.jpg" alt="WhichClass tooltip section listing the specs that suit a cloak">
+  <img src="images/tooltip-cloak.jpg" alt="WhichAlt tooltip section listing the specs that suit a cloak">
 </p>
 
 ## Features
@@ -24,22 +24,22 @@ Stat priorities and trinket ratings come from [Icy Veins](https://www.icy-veins.
 
 1. Download the latest code: **Code → Download ZIP**.
 2. Extract it into `World of Warcraft\_retail_\Interface\AddOns\`.
-3. Rename the folder from `WhichClass-main` to **`WhichClass`**. The game only loads it if the folder name matches the `.toc` file.
+3. Rename the folder from `WhichAlt-main` to **`WhichAlt`**. The game only loads it if the folder name matches the `.toc` file.
 4. Restart the game, or type `/reload` if it was already running.
 
-A **WC** button on the minimap shows that it has loaded.
+A **WA** button on the minimap shows that it has loaded.
 
 ## Using it
 
-Hover over any piece of gear. The WhichClass section appears at the bottom of the tooltip.
+Hover over any piece of gear. The WhichAlt section appears at the bottom of the tooltip.
 
 | Action | What it does |
 |---|---|
 | Left-click the minimap button | Opens settings |
-| Right-click the minimap button | Turns WhichClass tooltips on or off (the icon greys out while off) |
+| Right-click the minimap button | Turns WhichAlt tooltips on or off (the icon greys out while off) |
 | Drag the minimap button | Moves it around the minimap |
-| `/wc` | Opens settings |
-| `/wc minimap` | Hides or shows the minimap button |
+| `/whichalt` or `/walt` | Opens settings |
+| `/walt minimap` | Hides or shows the minimap button |
 
 ### How items are rated
 
@@ -57,10 +57,10 @@ The full list for every spec is in the reference image below.
 
 | Option | Default |
 |---|---|
-| Show WhichClass in tooltips (same as right-clicking the minimap button) | On |
+| Show WhichAlt in tooltips (same as right-clicking the minimap button) | On |
 | Show lower quality ratings ("second best" and "very low") | On |
 
-**Only show tooltip for:** WhichClass only appears on items whose binding is ticked. Off-hand items and trinkets can be switched off too.
+**Only show tooltip for:** WhichAlt only appears on items whose binding is ticked. Off-hand items and trinkets can be switched off too.
 
 | Option | Default |
 |---|---|
@@ -100,7 +100,7 @@ The data is kept in readable tables so it's easy to update when Icy Veins change
 | [`TrinketData.lua`](TrinketData.lua) | Trinket tiers per spec, matched by item ID so it works in every game language |
 | [`Data.lua`](Data.lua) | Which armor and weapon types each class can use |
 
-If a row in `SpecData.lua` or `TrinketData.lua` has a mistake, WhichClass prints the row in chat when you log in.
+If a row in `SpecData.lua` or `TrinketData.lua` has a mistake, WhichAlt prints the row in chat when you log in.
 
 ### Tools
 
@@ -124,7 +124,7 @@ python tools/make_reference.py
 
 ## Credits
 
-Stat priorities and trinket ratings: [Icy Veins](https://www.icy-veins.com/wow/) class guides. WhichClass isn't affiliated with Icy Veins or Blizzard Entertainment.
+Stat priorities and trinket ratings: [Icy Veins](https://www.icy-veins.com/wow/) class guides. WhichAlt isn't affiliated with Icy Veins or Blizzard Entertainment.
 
 ## License
 

@@ -1,4 +1,4 @@
-"""Rebuilds WhichClass/TrinketData.lua from the Icy Veins trinket rankings.
+"""Rebuilds WhichAlt/TrinketData.lua from the Icy Veins trinket rankings.
 
 Usage: python tools/update_trinkets.py [path to TrinketData.lua]
 
@@ -114,7 +114,7 @@ for spec, cls, role in SPECS:
 header = '''local _, ns = ...
 
 --[[
-WhichClass trinket ratings, from the Icy Veins "Best in Slot Gear" pages
+WhichAlt trinket ratings, from the Icy Veins "Best in Slot Gear" pages
 (trinket rankings table for each spec). Rebuild this file with:
 
     python tools/update_trinkets.py

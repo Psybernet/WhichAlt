@@ -1,13 +1,13 @@
 ## Interface: 120105
-## Title: WhichClass
+## Title: WhichAlt
 ## Notes: Shows which class and spec an item's secondary stats suit (stat priorities from Icy Veins, patch 12.1.5).
 ## Author: Martin Heine
-## Version: 1.1.0
-## IconTexture: Interface\AddOns\WhichClass\Media\WC
-## SavedVariables: WhichClassDB
+## Version: 1.2.0
+## IconTexture: Interface\AddOns\WhichAlt\Media\WA
+## SavedVariables: WhichAltDB
 
 SpecData.lua
 TrinketData.lua
 Data.lua
-WhichClass.lua
+WhichAlt.lua
 Settings.lua

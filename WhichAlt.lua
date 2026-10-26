@@ -1,13 +1,13 @@
 local addonName, ns = ...
 
-local ICON = "Interface\\AddOns\\WhichClass\\Media\\WC"
+local ICON = "Interface\\AddOns\\WhichAlt\\Media\\WA"
 local PRIMARIES = { "STRENGTH", "AGILITY", "INTELLECT" }
-local PREFIX = "|cffffd100WhichClass:|r "
+local PREFIX = "|cffffd100WhichAlt:|r "
 
 local GetItemStats = C_Item and C_Item.GetItemStats or GetItemStats
 local GetItemInfoInstant = C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
 
--- Saved settings. Anything missing from WhichClassDB falls back to these.
+-- Saved settings. Anything missing from WhichAltDB falls back to these.
 ns.DEFAULTS = {
 	enabled = true,          -- right-click on the minimap button
 	showLowerQuality = true, -- "second best" and "very low" lines
@@ -34,7 +34,7 @@ local ANY_CLASS_SLOTS = {
 	INVTYPE_TRINKET = true,
 }
 
--- Slots WhichClass never rates.
+-- Slots WhichAlt never rates.
 local SKIP_SLOTS = {
 	[""] = true,
 	INVTYPE_NON_EQUIP_IGNORE = true,
@@ -210,7 +210,7 @@ local function GetTrinketLines(ratings)
 	return lines
 end
 
--- Returns the lines to show under the WhichClass header, or nil if the
+-- Returns the lines to show under the WhichAlt header, or nil if the
 -- item's stats haven't loaded yet.
 local function GetMatchLines(link, itemID, classID, subclassID, equipLoc)
 	local isTrinket = equipLoc == "INVTYPE_TRINKET"
@@ -326,7 +326,7 @@ local function OnTooltipItem(tooltip, data)
 	if not ok or not lines or #lines == 0 then return end
 
 	tooltip:AddLine(" ")
-	tooltip:AddLine("|T" .. ICON .. ":14|t WhichClass", 1, 0.82, 0)
+	tooltip:AddLine("|T" .. ICON .. ":14|t WhichAlt", 1, 0.82, 0)
 	for _, line in ipairs(lines) do
 		tooltip:AddLine(line, 1, 1, 1, true)
 	end
@@ -338,7 +338,7 @@ TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, OnTooltipItem
 -- Minimap button
 ---------------------------------------------------------------------------
 
-local button = CreateFrame("Button", "WhichClassMinimapButton", Minimap)
+local button = CreateFrame("Button", "WhichAltMinimapButton", Minimap)
 button:SetSize(31, 31)
 button:SetFrameStrata("MEDIUM")
 button:SetFrameLevel(8)
@@ -386,7 +386,7 @@ end)
 
 local function ShowButtonTooltip(self)
 	GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-	GameTooltip:AddLine("WhichClass", 1, 0.82, 0)
+	GameTooltip:AddLine("WhichAlt", 1, 0.82, 0)
 	if ns.db.enabled then
 		GameTooltip:AddLine("Tooltips: |cff33ff33On|r", 1, 1, 1)
 	else
@@ -409,7 +409,7 @@ function ns.UpdateMinimapButton()
 	icon:SetAlpha(ns.db.enabled and 1 or 0.6)
 end
 
--- Turns WhichClass tooltips on or off (minimap right-click and the
+-- Turns WhichAlt tooltips on or off (minimap right-click and the
 -- General tab both use this).
 function ns.SetEnabled(enabled)
 	ns.db.enabled = enabled
@@ -436,8 +436,8 @@ loader:RegisterEvent("ADDON_LOADED")
 loader:SetScript("OnEvent", function(self, _, name)
 	if name ~= addonName then return end
 
-	WhichClassDB = WhichClassDB or {}
-	ns.db = WhichClassDB
+	WhichAltDB = WhichAltDB or {}
+	ns.db = WhichAltDB
 	-- Older versions had one "Only Bind on Equip and Warbound items" option.
 	if ns.db.bindOnly == false then ns.db.showSoulbound = true end
 	ns.db.bindOnly = nil
@@ -468,13 +468,13 @@ loader:SetScript("OnEvent", function(self, _, name)
 	self:UnregisterEvent("ADDON_LOADED")
 end)
 
-SLASH_WHICHCLASS1 = "/wc"
-SLASH_WHICHCLASS2 = "/whichclass"
-SlashCmdList.WHICHCLASS = function(msg)
+SLASH_WHICHALT1 = "/whichalt"
+SLASH_WHICHALT2 = "/walt"
+SlashCmdList.WHICHALT = function(msg)
 	if msg and msg:lower():match("^%s*minimap") then
 		ns.db.hideMinimap = not ns.db.hideMinimap
 		ns.UpdateMinimapButton()
-		print(PREFIX .. "minimap button " .. (ns.db.hideMinimap and "hidden" or "shown") .. ". Type /wc minimap to change it back.")
+		print(PREFIX .. "minimap button " .. (ns.db.hideMinimap and "hidden" or "shown") .. ". Type /walt minimap to change it back.")
 	else
 		ns.ToggleSettings()
 	end

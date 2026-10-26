@@ -1,7 +1,7 @@
 local _, ns = ...
 
 --[[
-WhichClass spec data. Edit the table below when stat priorities change.
+WhichAlt spec data. Edit the table below when stat priorities change.
 
   - One line per spec. If a spec has more than one recommended priority
     (hero talents, raid vs Mythic+, survivability vs damage), give each its
@@ -28,7 +28,7 @@ How the tooltip uses it:
     above, Haste is level 3, so any pair with Haste is second best.
   - Very low: everything else (pairs that include a level 4 stat).
 
-If a line has a mistake, WhichClass prints that line in chat on login.
+If a line has a mistake, WhichAlt prints that line in chat on login.
 
 Source: Icy Veins stat priority widgets, patch 12.1.5 (October 2026).
 ]]

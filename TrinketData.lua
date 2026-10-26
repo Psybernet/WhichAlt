@@ -1,7 +1,7 @@
 local _, ns = ...
 
 --[[
-WhichClass trinket ratings, from the Icy Veins "Best in Slot Gear" pages
+WhichAlt trinket ratings, from the Icy Veins "Best in Slot Gear" pages
 (trinket rankings table for each spec). Rebuild this file with:
 
     python tools/update_trinkets.py

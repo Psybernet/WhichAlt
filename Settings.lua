@@ -67,7 +67,7 @@ end
 ---------------------------------------------------------------------------
 
 local MAIN_OPTIONS = {
-	{ key = "enabled", label = "Show WhichClass in tooltips",
+	{ key = "enabled", label = "Show WhichAlt in tooltips",
 	  desc = "The same as right-clicking the minimap button." },
 	{ key = "showLowerQuality", label = "Show lower quality ratings",
 	  desc = "When no spec has the item's stats as its top two, list the specs it's second best for, or warn that the stats are very low." },
@@ -114,7 +114,7 @@ local function BuildGeneral(page)
 	local heading = Text(page, "GameFontNormal", "Only show tooltip for:")
 	heading:SetPoint("TOPLEFT", 16, y - 4)
 	local headingNote = Text(page, "GameFontDisableSmall",
-		"WhichClass only appears on items whose binding is ticked here. Off-hand items and trinkets can be switched off too.")
+		"WhichAlt only appears on items whose binding is ticked here. Off-hand items and trinkets can be switched off too.")
 	headingNote:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -3)
 	headingNote:SetWidth(WIDTH - 60)
 	y = y - 44
@@ -542,7 +542,7 @@ local function BuildCustomise(page)
 	nameBox:SetScript("OnEnterPressed", CreateRole)
 	nameBox:SetScript("OnEscapePressed", function() ShowRoleEditor(false) end)
 
-	StaticPopupDialogs.WHICHCLASS_DELETE_ROLE = {
+	StaticPopupDialogs.WHICHALT_DELETE_ROLE = {
 		text = "Delete your role \"%s\" for %s?",
 		button1 = YES,
 		button2 = NO,
@@ -559,11 +559,11 @@ local function BuildCustomise(page)
 	}
 	deleteRole:SetScript("OnClick", function()
 		local spec, build = selected.spec, selected.build
-		StaticPopup_Show("WHICHCLASS_DELETE_ROLE", build.label,
+		StaticPopup_Show("WHICHALT_DELETE_ROLE", build.label,
 			spec.spec .. " " .. ns.ClassGear[spec.class].name, { spec = spec, build = build })
 	end)
 
-	StaticPopupDialogs.WHICHCLASS_RESET_ALL = {
+	StaticPopupDialogs.WHICHALT_RESET_ALL = {
 		text = "Reset every spec to the Icy Veins stat priority?\nAll your custom priorities and roles will be removed.",
 		button1 = YES,
 		button2 = NO,
@@ -583,7 +583,7 @@ local function BuildCustomise(page)
 		preferredIndex = 3,
 	}
 	resetAll:SetScript("OnClick", function()
-		StaticPopup_Show("WHICHCLASS_RESET_ALL")
+		StaticPopup_Show("WHICHALT_RESET_ALL")
 	end)
 
 	refreshCustomise = function()
@@ -637,7 +637,7 @@ end
 ---------------------------------------------------------------------------
 
 local function CreateWindow()
-	frame = CreateFrame("Frame", "WhichClassSettings", UIParent, "BasicFrameTemplateWithInset")
+	frame = CreateFrame("Frame", "WhichAltSettings", UIParent, "BasicFrameTemplateWithInset")
 	frame:SetSize(WIDTH, HEIGHT)
 	frame:SetPoint("CENTER")
 	frame:SetFrameStrata("DIALOG")
@@ -648,14 +648,14 @@ local function CreateWindow()
 	frame:SetScript("OnDragStart", frame.StartMoving)
 	frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 	frame:Hide()
-	tinsert(UISpecialFrames, "WhichClassSettings") -- Escape closes it
+	tinsert(UISpecialFrames, "WhichAltSettings") -- Escape closes it
 
 	local title = frame.TitleText
 	if not title then
 		title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 		title:SetPoint("TOP", 0, -5)
 	end
-	title:SetText("WhichClass Settings")
+	title:SetText("WhichAlt Settings")
 
 	local pages, tabs = {}, {}
 	local function ShowTab(index)
