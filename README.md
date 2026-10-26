@@ -22,7 +22,7 @@ Stat priorities and trinket ratings come from [Icy Veins](https://www.icy-veins.
 
 ## Installing
 
-1. Go to the [latest release](https://github.com/Psybernet/WhichAlt/releases/latest) and download **`WhichAlt-x.y.z.zip`** under *Assets*.
+1. Go to the [latest release](https://github.com/Psybernet/WhichAlt/releases/latest) and download **`WhichAlt-vX.Y.Z.zip`** under *Assets*.
 2. Extract it into `World of Warcraft\_retail_\Interface\AddOns\`. You should end up with an `AddOns\WhichAlt` folder.
 3. Restart the game, or type `/reload` if it was already running.
 
@@ -140,7 +140,7 @@ Version numbers follow [semantic versioning](https://semver.org/): `1.3.1` for a
    git push origin v1.4.0
    ```
 
-GitHub then builds `WhichAlt-1.4.0.zip` (just the addon folder, without the images and tools) and publishes it on the [Releases](https://github.com/Psybernet/WhichAlt/releases) page with the changelog as release notes. The build stops with an error if the tag and the `.toc` version don't match. You can follow it under the repository's **Actions** tab.
+GitHub then builds `WhichAlt-v1.4.0.zip` (just the addon folder, without the images and tools) and publishes it on the [Releases](https://github.com/Psybernet/WhichAlt/releases) page with the changelog as release notes. The build stops with an error if the tag and the `.toc` version don't match. You can follow it under the repository's **Actions** tab.
 
 **CurseForge:** once the project exists there, add its ID to `WhichAlt.toc` as `## X-Curse-Project-ID: 123456`, add a CurseForge API token as a repository secret named `CF_API_KEY`, and remove the `#` from the `CF_API_KEY` line in [`.github/workflows/release.yml`](.github/workflows/release.yml). Each tag will then upload to CurseForge too.
 
