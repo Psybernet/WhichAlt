@@ -1,45 +1,39 @@
 local _, ns = ...
 
--- The settings window is built the first time it's opened. Everything here
+-- The settings window: a sidebar with the pages, a header, the page itself
+-- and a footer. It's built the first time it's opened, and everything here
 -- reacts to clicks; nothing runs on a timer.
 
-local WIDTH, HEIGHT = 680, 490
-local WHITE = "Interface\\Buttons\\WHITE8X8"
+local UI = ns.UI
+local C = UI.COLORS
+
+local WIDTH, HEIGHT = 880, 600
+local SIDEBAR = 200
+local PAD = 28
+local PAGE_WIDTH = WIDTH - SIDEBAR - PAD * 2
 local MAX_ROLE_NAME = 30
+local ICON = "Interface\\AddOns\\WhichAlt\\Media\\WA"
 
 local frame
 local refreshGeneral, refreshCustomise
+local confirm -- confirm(message, onYes), set when the window is built
 
 local function ClassColored(classFile, text)
 	local color = C_ClassColor and C_ClassColor.GetClassColor(classFile) or RAID_CLASS_COLORS[classFile]
 	return color and color:WrapTextInColorCode(text) or text
 end
 
-local function Text(parent, template, text)
-	local fs = parent:CreateFontString(nil, "ARTWORK", template)
-	fs:SetJustifyH("LEFT")
-	if text then fs:SetText(text) end
-	return fs
+local function Colored(color, text)
+	return "|c" .. UI.Hex(color) .. text .. "|r"
 end
 
-local function Button(parent, text, width)
-	local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-	b:SetSize(width or 140, 24)
-	b:SetText(text)
-	return b
-end
-
-local function Checkbox(parent, label)
-	local cb = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-	cb:SetSize(26, 26)
-	cb.label = Text(cb, "GameFontHighlight", label)
-	cb.label:SetPoint("LEFT", cb, "RIGHT", 4, 1)
-	return cb
+local function Trim(s)
+	return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
 -- A message that shows for a moment, then fades out.
 local function FlashText(parent)
-	local fs = Text(parent, "GameFontNormal")
+	local fs = UI.Text(parent, "Normal")
 	fs:SetAlpha(0)
 	local group = fs:CreateAnimationGroup()
 	local fade = group:CreateAnimation("Alpha")
@@ -48,9 +42,9 @@ local function FlashText(parent)
 	fade:SetStartDelay(1.5)
 	fade:SetDuration(0.8)
 	group:SetScript("OnFinished", function() fs:SetAlpha(0) end)
-	function fs:Flash(message, r, g, b)
+	function fs:Flash(message, color)
 		self:SetText(message)
-		self:SetTextColor(r, g, b)
+		self:SetTextColor(color[1], color[2], color[3])
 		group:Stop()
 		self:SetAlpha(1)
 		group:Play()
@@ -58,27 +52,43 @@ local function FlashText(parent)
 	return fs
 end
 
-local function Trim(s)
-	return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+local GOOD = { 0.2, 1, 0.45 }
+local BAD = { 1, 0.38, 0.38 }
+local WARN = { 1, 0.67, 0.2 }
+
+-- A setting row: label and description on the left, toggle on the right.
+local function ToggleRow(parent, x, y, width, label, desc, onChange)
+	local row = UI.Panel(parent)
+	row:SetSize(width, 46)
+	row:SetPoint("TOPLEFT", x, y)
+	local title = UI.Text(row, "Label", label)
+	title:SetPoint("TOPLEFT", 14, -8)
+	if desc then
+		local note = UI.Text(row, "Small", desc)
+		note:SetPoint("TOPLEFT", 14, -27)
+		note:SetPoint("RIGHT", row, "RIGHT", -70, 0)
+		note:SetWordWrap(false)
+	end
+	local toggle = UI.Toggle(row, onChange)
+	toggle:SetPoint("RIGHT", -14, 0)
+	return toggle
 end
 
 ---------------------------------------------------------------------------
--- General tab
+-- General page
 ---------------------------------------------------------------------------
 
 local MAIN_OPTIONS = {
-	{ key = "enabled", label = "Show WhichAlt in tooltips",
-	  desc = "The same as right-clicking the minimap button." },
-	{ key = "showLowerQuality", label = "Show lower quality ratings",
-	  desc = "When no spec has the item's stats as its top two, list the specs it's second best for, or warn that the stats are very low." },
+	{ key = "enabled", label = "Show WhichAlt in tooltips", desc = "The same as right-clicking the minimap button." },
+	{ key = "showLowerQuality", label = "Show lower quality ratings", desc = "If no spec has the item's top two stats, show the specs it's second best for." },
 }
 
 local FILTER_OPTIONS = {
-	{ key = "showBoE", label = "Bind on Equip items" },
-	{ key = "showWarbound", label = "Warbound items", note = "including Warbound until equipped" },
-	{ key = "showSoulbound", label = "Soulbound items", note = "including dungeon and raid drops that bind when picked up" },
-	{ key = "showOffHand", label = "Off-hand items", note = "shields, off-hand weapons and held items" },
-	{ key = "showTrinkets", label = "Trinkets", note = "Icy Veins tier, or matched by stats if unrated" },
+	{ key = "showBoE", label = "Bind on Equip items", desc = "Gear you can still trade or sell." },
+	{ key = "showWarbound", label = "Warbound items", desc = "Including Warbound until equipped." },
+	{ key = "showSoulbound", label = "Soulbound items", desc = "Including drops that bind when picked up." },
+	{ key = "showOffHand", label = "Off-hand items", desc = "Shields, off-hand weapons and held items." },
+	{ key = "showTrinkets", label = "Trinkets", desc = "Icy Veins tier, or matched by stats if unrated." },
 }
 
 local function SetOption(key, value)
@@ -90,86 +100,68 @@ local function SetOption(key, value)
 	ns.ClearCache()
 end
 
-local function BuildGeneral(page)
-	local checks = {}
-	local function Track(cb, key)
-		cb.key = key
-		cb:SetScript("OnClick", function(self)
-			SetOption(key, self:GetChecked() and true or false)
+local function BuildGeneral(page, footer)
+	local toggles = {}
+	local function Add(option, x, y, width)
+		local toggle = ToggleRow(page, x, y, width, option.label, option.desc, function(on)
+			SetOption(option.key, on)
 		end)
-		checks[#checks + 1] = cb
+		toggle.key = option.key
+		toggles[#toggles + 1] = toggle
 	end
 
-	local y = -8
-	for _, option in ipairs(MAIN_OPTIONS) do
-		local cb = Checkbox(page, option.label)
-		cb:SetPoint("TOPLEFT", 12, y)
-		local desc = Text(cb, "GameFontDisableSmall", option.desc)
-		desc:SetPoint("TOPLEFT", cb.label, "BOTTOMLEFT", 0, -3)
-		desc:SetWidth(WIDTH - 110)
-		Track(cb, option.key)
-		y = y - 58
+	local tooltip = UI.Section(page, "Tooltip")
+	tooltip:SetPoint("TOPLEFT", 0, 0)
+	for i, option in ipairs(MAIN_OPTIONS) do
+		Add(option, 0, -22 - (i - 1) * 50, PAGE_WIDTH)
 	end
 
-	local heading = Text(page, "GameFontNormal", "Only show tooltip for:")
-	heading:SetPoint("TOPLEFT", 16, y - 4)
-	local headingNote = Text(page, "GameFontDisableSmall",
-		"WhichAlt only appears on items whose binding is ticked here. Off-hand items and trinkets can be switched off too.")
-	headingNote:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -3)
-	headingNote:SetWidth(WIDTH - 60)
-	y = y - 44
-
-	for _, option in ipairs(FILTER_OPTIONS) do
-		local cb = Checkbox(page, option.label)
-		cb:SetPoint("TOPLEFT", 30, y)
-		if option.note then
-			local note = Text(cb, "GameFontDisableSmall", "(" .. option.note .. ")")
-			note:SetPoint("LEFT", cb.label, "RIGHT", 8, 0)
-		end
-		Track(cb, option.key)
-		y = y - 30
+	local filters = UI.Section(page, "Only show tooltip for")
+	filters:SetPoint("TOPLEFT", 0, -130)
+	local half = (PAGE_WIDTH - 4) / 2
+	for i, option in ipairs(FILTER_OPTIONS) do
+		local col, line = (i - 1) % 2, math.floor((i - 1) / 2)
+		Add(option, col * (half + 4), -152 - line * 50, half)
 	end
 
-	local reset = Button(page, "Restore default settings", 190)
-	reset:SetPoint("BOTTOMLEFT", 12, 10)
-	local flash = FlashText(page)
-	flash:SetPoint("LEFT", reset, "RIGHT", 12, 0)
+	local data = UI.Section(page, "Data")
+	data:SetPoint("TOPLEFT", 0, -314)
+	local about = UI.Text(page, "Small")
+	about:SetPoint("TOPLEFT", 0, -336)
+	about:SetWidth(PAGE_WIDTH)
+	about:SetSpacing(4)
+
+	local reset = UI.Button(footer, "Restore defaults", 160)
+	reset:SetPoint("LEFT", 0, 0)
+	local flash = FlashText(footer)
+	flash:SetPoint("LEFT", reset, "RIGHT", 14, 0)
 	reset:SetScript("OnClick", function()
 		for key, value in pairs(ns.DEFAULTS) do
 			SetOption(key, value)
 		end
 		refreshGeneral()
-		flash:Flash("Settings restored", 0.2, 1, 0.2)
+		flash:Flash("Settings restored", GOOD)
 	end)
 
-	-- Version and data status, e.g. "WhichAlt 1.3.0" then one line per data
-	-- file, then whether the data matches the game's patch.
-	local about = Text(page, "GameFontDisableSmall")
-	about:SetPoint("BOTTOMLEFT", reset, "TOPLEFT", 0, 12)
-	about:SetWidth(WIDTH - 60)
-	about:SetSpacing(3)
-
 	refreshGeneral = function()
-		for _, cb in ipairs(checks) do
-			cb:SetChecked(ns.db[cb.key])
+		for _, toggle in ipairs(toggles) do
+			toggle:SetChecked(ns.db[toggle.key])
 		end
-
 		local lines, outdated, game = ns.GetDataStatus()
-		table.insert(lines, 1, "|cffffd100WhichAlt " .. ns.VERSION .. "|r")
 		if outdated then
-			lines[#lines + 1] = "|cffffaa00Some data is from an older patch than the game (" .. game .. "). Check for a WhichAlt update.|r"
+			lines[#lines + 1] = Colored(WARN, "Some data is from an older patch than the game (" .. game .. "). Check for a WhichAlt update.")
 		elseif game then
-			lines[#lines + 1] = "|cff33ff33Up to date for patch " .. game .. "|r"
+			lines[#lines + 1] = Colored(GOOD, "Up to date for patch " .. game)
 		end
 		about:SetText(table.concat(lines, "\n"))
 	end
 end
 
 ---------------------------------------------------------------------------
--- Customise tab
+-- Customise page
 ---------------------------------------------------------------------------
 
-local SLOT_W, SLOT_H, GAP = 118, 34, 52
+local SLOT_W, SLOT_H, GAP = 116, 36, 46
 
 local selected = { class = nil, spec = nil, build = nil }
 local state = { order = {}, seps = {} } -- what the row shows right now
@@ -261,90 +253,73 @@ local function IsDirty()
 	return ns.FormatStats(state.order, state.seps) ~= savedText
 end
 
-local function Dropdown(parent, width, label)
-	local dd = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
-	dd:SetWidth(width)
-	local text = Text(parent, "GameFontNormalSmall", label)
-	text:SetPoint("BOTTOMLEFT", dd, "TOPLEFT", 2, 3)
-	return dd
-end
+local CHANGED = " " .. Colored({ 1, 0.82, 0 }, "*")
 
-local function BuildCustomise(page)
-	local intro = Text(page, "GameFontHighlightSmall",
-		"Pick a role, drag the stat boxes into your order, and choose > (better than) or = (equal to) between them. Changes only apply when you press Save. Use New role to add your own.")
-	intro:SetPoint("TOPLEFT", 14, -6)
-	intro:SetWidth(WIDTH - 60)
+local function BuildCustomise(page, footer)
+	local flash -- footer message, created below
 
-	-- Class, spec and role pickers, each with a label above it
-	local classDD = Dropdown(page, 150, "Class")
-	classDD:SetPoint("TOPLEFT", 14, -58)
-	local specDD = Dropdown(page, 150, "Spec")
-	specDD:SetPoint("LEFT", classDD, "RIGHT", 12, 0)
-	local roleDD = Dropdown(page, 190, "Role")
-	roleDD:SetPoint("LEFT", specDD, "RIGHT", 12, 0)
+	-- Role pickers
+	local roleSection = UI.Section(page, "Role")
+	roleSection:SetPoint("TOPLEFT", 0, 0)
 
-	classDD:SetupMenu(function(_, root)
+	local columns = { { "Class", 0, 180 }, { "Spec", 196, 180 }, { "Role", 392, PAGE_WIDTH - 392 } }
+	for _, column in ipairs(columns) do
+		local label = UI.Text(page, "Small", column[1])
+		label:SetPoint("TOPLEFT", column[2], -24)
+	end
+
+	local classDD = UI.Dropdown(page, columns[1][3], function(add)
 		local classes = {}
 		for classFile, gear in pairs(ns.ClassGear) do
 			classes[#classes + 1] = { file = classFile, name = gear.name }
 		end
 		table.sort(classes, function(a, b) return a.name < b.name end)
 		for _, class in ipairs(classes) do
-			local text = ClassColored(class.file, class.name) .. (ClassHasChanges(class.file) and " |cffffd100*|r" or "")
-			root:CreateRadio(text,
-				function(file) return selected.class == file end,
-				function(file) SelectClass(file) end,
-				class.file)
+			add(ClassColored(class.file, class.name) .. (ClassHasChanges(class.file) and CHANGED or ""),
+				selected.class == class.file, function() SelectClass(class.file) end)
 		end
 	end)
+	classDD:SetPoint("TOPLEFT", columns[1][2], -42)
 
-	specDD:SetupMenu(function(_, root)
+	local specDD = UI.Dropdown(page, columns[2][3], function(add)
 		for _, spec in ipairs(SpecsOf(selected.class)) do
-			local text = ClassColored(spec.class, spec.spec) .. (SpecHasChanges(spec) and " |cffffd100*|r" or "")
-			root:CreateRadio(text,
-				function(s) return selected.spec == s end,
-				function(s) SelectSpec(s) end,
-				spec)
+			add(ClassColored(spec.class, spec.spec) .. (SpecHasChanges(spec) and CHANGED or ""),
+				selected.spec == spec, function() SelectSpec(spec) end)
 		end
 	end)
+	specDD:SetPoint("TOPLEFT", columns[2][2], -42)
 
-	roleDD:SetupMenu(function(_, root)
+	local roleDD = UI.Dropdown(page, columns[3][3], function(add)
 		if not selected.spec then return end
 		for _, build in ipairs(selected.spec.builds) do
 			local text = RoleName(build)
 			if build.isRole then
-				text = text .. " |cff66ccff(yours)|r"
+				text = text .. " " .. Colored(C.accent, "(yours)")
 			elseif build.custom then
-				text = text .. " |cffffd100*|r"
+				text = text .. CHANGED
 			end
-			root:CreateRadio(text,
-				function(b) return selected.build == b end,
-				function(b) LoadBuild(b) end,
-				build)
+			add(text, selected.build == build, function() LoadBuild(build) end)
 		end
 	end)
+	roleDD:SetPoint("TOPLEFT", columns[3][2], -42)
 
-	local legend = Text(page, "GameFontDisableSmall", "|cffffd100*|r = has your changes")
-	legend:SetPoint("TOPLEFT", classDD, "BOTTOMLEFT", 2, -8)
+	local legend = UI.Text(page, "Small", Colored({ 1, 0.82, 0 }, "*") .. " has your changes")
+	legend:SetPoint("TOPLEFT", 0, -86)
 
-	-- New role / Delete role, and the name box that New role opens
-	local newRole = Button(page, "New role", 92)
-	newRole:SetPoint("TOPLEFT", roleDD, "BOTTOMLEFT", 0, -4)
-	local deleteRole = Button(page, "Delete role", 92)
-	deleteRole:SetPoint("LEFT", newRole, "RIGHT", 6, 0)
+	-- New role / Delete role, and the name box New role opens
+	local newRole = UI.Button(page, "New role", 112)
+	newRole:SetPoint("TOPLEFT", columns[3][2], -80)
+	local deleteRole = UI.Button(page, "Delete role", 112)
+	deleteRole:SetPoint("LEFT", newRole, "RIGHT", 8, 0)
 
-	local nameBox = CreateFrame("EditBox", nil, page, "InputBoxTemplate")
-	nameBox:SetSize(150, 20)
-	nameBox:SetPoint("TOPLEFT", roleDD, "BOTTOMLEFT", 6, -6)
-	nameBox:SetAutoFocus(false)
+	local nameBox = UI.EditBox(page, 230, "New role name")
+	nameBox:SetPoint("TOPLEFT", columns[2][2], -80)
 	nameBox:SetMaxLetters(MAX_ROLE_NAME)
-	local nameLabel = Text(page, "GameFontNormalSmall", "New role name:")
-	nameLabel:SetPoint("RIGHT", nameBox, "LEFT", -10, 0)
-	local create = Button(page, "Create", 64)
-	create:SetPoint("LEFT", nameBox, "RIGHT", 6, 0)
-	local cancel = Button(page, "Cancel", 64)
-	cancel:SetPoint("LEFT", create, "RIGHT", 4, 0)
-	local editorParts = { nameBox, nameLabel, create, cancel }
+	local create = UI.Button(page, "Create", 90, true)
+	create:SetPoint("LEFT", nameBox, "RIGHT", 8, 0)
+	local cancel = UI.Button(page, "Cancel", 90)
+	cancel:SetPoint("LEFT", create, "RIGHT", 6, 0)
+	local editorParts = { nameBox, create, cancel }
 
 	local function ShowRoleEditor(show)
 		for _, part in ipairs(editorParts) do part:SetShown(show) end
@@ -361,21 +336,22 @@ local function BuildCustomise(page)
 	hideRoleEditor = function() ShowRoleEditor(false) end
 	ShowRoleEditor(false)
 
-	-- The stat row: four slots, a box per stat sitting in a slot, and a
+	-- Stat row: four slots, a box per stat sitting in a slot, and a
 	-- > / = picker between each pair of slots.
-	local row = CreateFrame("Frame", nil, page, "BackdropTemplate")
-	local rowWidth = 4 * SLOT_W + 3 * GAP
-	row:SetSize(rowWidth + 20, SLOT_H + 64)
-	row:SetPoint("TOP", page, "TOP", 0, -128)
-	row:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
-	row:SetBackdropColor(0, 0, 0, 0.25)
-	row:SetBackdropBorderColor(0.3, 0.3, 0.35, 1)
+	local statSection = UI.Section(page, "Stat priority")
+	statSection:SetPoint("TOPLEFT", 0, -132)
+
+	local row = UI.Panel(page)
+	row:SetSize(PAGE_WIDTH, 100)
+	row:SetPoint("TOPLEFT", 0, -154)
+	local left = (PAGE_WIDTH - (4 * SLOT_W + 3 * GAP)) / 2
 
 	-- Outline that flashes around the row when something is saved.
 	local glow = CreateFrame("Frame", nil, row, "BackdropTemplate")
-	glow:SetPoint("TOPLEFT", -3, 3)
-	glow:SetPoint("BOTTOMRIGHT", 3, -3)
-	glow:SetBackdrop({ edgeFile = WHITE, edgeSize = 2 })
+	glow:SetPoint("TOPLEFT", -2, 2)
+	glow:SetPoint("BOTTOMRIGHT", 2, -2)
+	glow:SetBackdrop({ edgeFile = UI.WHITE, edgeSize = 2 })
+	glow:SetBackdropBorderColor(C.accent[1], C.accent[2], C.accent[3], 1)
 	glow:SetAlpha(0)
 	local glowGroup = glow:CreateAnimationGroup()
 	local glowFade = glowGroup:CreateAnimation("Alpha")
@@ -384,8 +360,7 @@ local function BuildCustomise(page)
 	glowFade:SetStartDelay(1.2)
 	glowFade:SetDuration(0.8)
 	glowGroup:SetScript("OnFinished", function() glow:SetAlpha(0) end)
-	local function Glow(r, g, b)
-		glow:SetBackdropBorderColor(r, g, b, 1)
+	local function Glow()
 		glowGroup:Stop()
 		glow:SetAlpha(1)
 		glowGroup:Play()
@@ -393,31 +368,27 @@ local function BuildCustomise(page)
 
 	local slots, slotTiers, seps = {}, {}, {}
 	for i = 1, 4 do
-		local slot = CreateFrame("Frame", nil, row, "BackdropTemplate")
+		local slot = UI.Panel(row, C.bg, C.border)
 		slot:SetSize(SLOT_W, SLOT_H)
-		slot:SetPoint("TOPLEFT", 10 + (i - 1) * (SLOT_W + GAP), -24)
-		slot:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
-		slot:SetBackdropColor(0, 0, 0, 0.4)
-		slot:SetBackdropBorderColor(0.35, 0.35, 0.4, 1)
-		local number = Text(slot, "GameFontDisableSmall", "#" .. i)
-		number:SetPoint("BOTTOM", slot, "TOP", 0, 4)
-		local tier = Text(slot, "GameFontHighlightSmall")
-		tier:SetPoint("TOP", slot, "BOTTOM", 0, -5)
+		slot:SetPoint("TOPLEFT", left + (i - 1) * (SLOT_W + GAP), -30)
+		local number = UI.Text(slot, "Small", "#" .. i)
+		number:SetPoint("BOTTOM", slot, "TOP", 0, 5)
+		local tier = UI.Text(slot, "Small")
+		tier:SetPoint("TOP", slot, "BOTTOM", 0, -6)
 		slots[i], slotTiers[i] = slot, tier
 	end
 
 	for i = 1, 3 do
-		local dd = CreateFrame("DropdownButton", nil, row, "WowStyle1DropdownTemplate")
-		dd:SetWidth(GAP - 6)
-		dd:SetPoint("LEFT", slots[i], "RIGHT", 3, 0)
-		dd:SetupMenu(function(_, root)
+		local dd = UI.Dropdown(row, GAP - 8, function(add)
 			for _, sep in ipairs({ ">", "=" }) do
-				root:CreateRadio(sep,
-					function(s) return state.seps[i] == s end,
-					function(s) state.seps[i] = s; refreshCustomise() end,
-					sep)
+				add(sep, state.seps[i] == sep, function()
+					state.seps[i] = sep
+					refreshCustomise()
+				end)
 			end
 		end)
+		dd:SetHeight(SLOT_H)
+		dd:SetPoint("LEFT", slots[i], "RIGHT", 4, 0)
 		seps[i] = dd
 	end
 
@@ -435,16 +406,13 @@ local function BuildCustomise(page)
 	for _, stat in ipairs(ns.STATS) do
 		local box = CreateFrame("Button", nil, row, "BackdropTemplate")
 		box:SetSize(SLOT_W, SLOT_H)
-		box:SetBackdrop({ bgFile = WHITE, edgeFile = WHITE, edgeSize = 1 })
-		box:SetBackdropColor(stat.color[1], stat.color[2], stat.color[3], 1)
-		box:SetBackdropBorderColor(0, 0, 0, 0.6)
+		UI.Paint(box, stat.color, stat.color)
 		box:SetFrameLevel(row:GetFrameLevel() + 5)
 		box:SetMovable(true)
 		box:SetClampedToScreen(true)
 		box:RegisterForDrag("LeftButton")
-		local label = Text(box, "GameFontHighlight", stat.name)
+		local label = UI.Text(box, "Box", stat.name)
 		label:SetPoint("CENTER")
-		label:SetTextColor(0.08, 0.09, 0.12)
 		box.key = stat.key
 
 		box:SetScript("OnEnter", function(self)
@@ -454,7 +422,7 @@ local function BuildCustomise(page)
 			GameTooltip:Show()
 		end)
 		box:SetScript("OnLeave", function(self)
-			self:SetBackdropBorderColor(0, 0, 0, 0.6)
+			self:SetBackdropBorderColor(stat.color[1], stat.color[2], stat.color[3], 1)
 			GameTooltip:Hide()
 		end)
 		box:SetScript("OnDragStart", function(self)
@@ -478,31 +446,27 @@ local function BuildCustomise(page)
 		boxes[stat.key] = box
 	end
 
-	-- Status, defaults and buttons
-	local status = Text(page, "GameFontHighlight")
-	status:SetPoint("TOPLEFT", row, "BOTTOMLEFT", 0, -12)
-	local default = Text(page, "GameFontDisableSmall")
-	default:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -4)
-	default:SetWidth(rowWidth + 20)
+	local status = UI.Text(page, "Label")
+	status:SetPoint("TOPLEFT", row, "BOTTOMLEFT", 0, -14)
+	local default = UI.Text(page, "Small")
+	default:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -6)
+	default:SetWidth(PAGE_WIDTH)
 
-	local save = Button(page, "Save", 110)
-	save:SetPoint("BOTTOMLEFT", 12, 10)
-	local resetRole = Button(page, "Reset to default", 140)
+	-- Footer buttons
+	local save = UI.Button(footer, "Save", 110, true)
+	save:SetPoint("LEFT", 0, 0)
+	local resetRole = UI.Button(footer, "Reset to default", 150)
 	resetRole:SetPoint("LEFT", save, "RIGHT", 8, 0)
-	local resetAll = Button(page, "Reset all specs", 140)
-	resetAll:SetPoint("BOTTOMRIGHT", -12, 10)
-	local flash = FlashText(page)
-	flash:SetPoint("LEFT", resetRole, "RIGHT", 12, 0)
+	local resetAll = UI.Button(footer, "Reset all specs", 150)
+	resetAll:SetPoint("LEFT", resetRole, "RIGHT", 8, 0)
+	flash = FlashText(footer)
+	flash:SetPoint("LEFT", resetAll, "RIGHT", 14, 0)
 
 	local function Done(message, build)
 		ns.ClearCache()
 		LoadBuild(build or selected.build)
-		flash:Flash(message, 0.2, 1, 0.2)
-		Glow(0.2, 1, 0.2)
-	end
-
-	local function Problem(message)
-		flash:Flash(message, 1, 0.35, 0.35)
+		flash:Flash(message, GOOD)
+		Glow()
 	end
 
 	save:SetScript("OnClick", function()
@@ -526,7 +490,7 @@ local function BuildCustomise(page)
 		local build = selected.build
 		if build.isRole then
 			LoadBuild(build)
-			flash:Flash("Changes undone", 0.2, 1, 0.2)
+			flash:Flash("Changes undone", GOOD)
 			return
 		end
 		ns.db.custom[build.key] = nil
@@ -534,15 +498,28 @@ local function BuildCustomise(page)
 		Done("Reset to default")
 	end)
 
+	resetAll:SetScript("OnClick", function()
+		confirm("Reset every spec to the Icy Veins stat priority?\nAll your custom priorities and roles will be removed.", function()
+			wipe(ns.db.custom)
+			ns.RemoveAllRoles()
+			for _, spec in ipairs(ns.Specs) do
+				for _, build in ipairs(spec.builds) do
+					ns.SetBuildPriority(build, nil)
+				end
+			end
+			Done("All specs reset", selected.spec.builds[1])
+		end)
+	end)
+
 	-- New roles start as a copy of whatever the row shows now.
 	local function CreateRole()
 		local name = Trim(nameBox:GetText() or "")
 		if name == "" then
-			Problem("Type a name for the role")
+			flash:Flash("Type a name for the role", BAD)
 		elseif name:find("|", 1, true) then
-			Problem("Role names can't contain |")
+			flash:Flash("Role names can't contain |", BAD)
 		elseif ns.RoleNameTaken(selected.spec, name) then
-			Problem("This spec already has a role called " .. name)
+			flash:Flash("This spec already has a role called " .. name, BAD)
 		else
 			local build = ns.AddRole(selected.spec, name, ns.FormatStats(state.order, state.seps))
 			Done("Role created", build)
@@ -554,57 +531,24 @@ local function BuildCustomise(page)
 	nameBox:SetScript("OnEnterPressed", CreateRole)
 	nameBox:SetScript("OnEscapePressed", function() ShowRoleEditor(false) end)
 
-	StaticPopupDialogs.WHICHALT_DELETE_ROLE = {
-		text = "Delete your role \"%s\" for %s?",
-		button1 = YES,
-		button2 = NO,
-		OnAccept = function(_, data)
-			ns.RemoveRole(data.spec, data.build)
-			if selected.spec == data.spec then
-				Done("Role deleted", data.spec.builds[1])
-			end
-		end,
-		timeout = 0,
-		whileDead = true,
-		hideOnEscape = true,
-		preferredIndex = 3,
-	}
 	deleteRole:SetScript("OnClick", function()
 		local spec, build = selected.spec, selected.build
-		StaticPopup_Show("WHICHALT_DELETE_ROLE", build.label,
-			spec.spec .. " " .. ns.ClassGear[spec.class].name, { spec = spec, build = build })
-	end)
-
-	StaticPopupDialogs.WHICHALT_RESET_ALL = {
-		text = "Reset every spec to the Icy Veins stat priority?\nAll your custom priorities and roles will be removed.",
-		button1 = YES,
-		button2 = NO,
-		OnAccept = function()
-			wipe(ns.db.custom)
-			ns.RemoveAllRoles()
-			for _, spec in ipairs(ns.Specs) do
-				for _, build in ipairs(spec.builds) do
-					ns.SetBuildPriority(build, nil)
-				end
+		local specName = spec.spec .. " " .. ns.ClassGear[spec.class].name
+		confirm("Delete your role \"" .. build.label .. "\" for " .. specName .. "?", function()
+			ns.RemoveRole(spec, build)
+			if selected.spec == spec then
+				Done("Role deleted", spec.builds[1])
 			end
-			Done("All specs reset", selected.spec.builds[1])
-		end,
-		timeout = 0,
-		whileDead = true,
-		hideOnEscape = true,
-		preferredIndex = 3,
-	}
-	resetAll:SetScript("OnClick", function()
-		StaticPopup_Show("WHICHALT_RESET_ALL")
+		end)
 	end)
 
 	refreshCustomise = function()
 		local build = selected.build
 		if not build then return end
 
-		classDD:GenerateMenu()
-		specDD:GenerateMenu()
-		roleDD:GenerateMenu()
+		classDD:Refresh()
+		specDD:Refresh()
+		roleDD:Refresh()
 
 		-- Put each stat's box in its slot and show how the tooltip will
 		-- treat that position with the current separators.
@@ -614,27 +558,27 @@ local function BuildCustomise(page)
 			box:ClearAllPoints()
 			box:SetPoint("CENTER", slots[i], "CENTER")
 			if preview.place[key] <= 2 then
-				slotTiers[i]:SetText("|cff33ff33Top two|r")
+				slotTiers[i]:SetText(Colored(C.accent, "Top two"))
 			elseif preview.level[key] <= 3 then
-				slotTiers[i]:SetText("|cffccccccSecond best|r")
+				slotTiers[i]:SetText(Colored(C.muted, "Second best"))
 			else
-				slotTiers[i]:SetText("|cffff5555Very low|r")
+				slotTiers[i]:SetText(Colored(BAD, "Very low"))
 			end
 		end
-		for i = 1, 3 do seps[i]:GenerateMenu() end
+		for i = 1, 3 do seps[i]:Refresh() end
 
 		local dirty = IsDirty()
 		local name = ClassColored(selected.spec.class, selected.spec.spec .. " " .. ns.ClassGear[selected.spec.class].name)
 		name = name .. " (" .. RoleName(build) .. ")"
 		local using
 		if build.isRole then
-			using = "|cff66ccffone of your roles|r"
+			using = Colored(C.accent, "one of your roles")
 			default:SetText("You made this role, so it has no Icy Veins default. Delete role removes it.")
 		else
-			using = build.custom and "|cff33ff33using your custom priority|r" or "using the Icy Veins default"
+			using = build.custom and Colored(GOOD, "using your custom priority") or "using the Icy Veins default"
 			default:SetText("Icy Veins default: " .. build.defaultText)
 		end
-		status:SetText(name .. " is " .. using .. (dirty and "   |cffffaa00Unsaved changes|r" or ""))
+		status:SetText(name .. " is " .. using .. (dirty and "   " .. Colored(WARN, "Unsaved changes") or ""))
 
 		save:SetEnabled(dirty)
 		resetRole:SetText(build.isRole and "Undo changes" or "Reset to default")
@@ -645,55 +589,124 @@ local function BuildCustomise(page)
 end
 
 ---------------------------------------------------------------------------
--- Window and tabs
+-- Window: sidebar, header, pages and footer
 ---------------------------------------------------------------------------
 
+local PAGES = {
+	{ name = "General", subtitle = "Choose when WhichAlt adds its section to item tooltips.", build = BuildGeneral },
+	{ name = "Customise", subtitle = "Drag a role's stats into your order, pick > or = between them, then Save. Or add your own roles.", build = BuildCustomise },
+}
+
 local function CreateWindow()
-	frame = CreateFrame("Frame", "WhichAltSettings", UIParent, "BasicFrameTemplateWithInset")
+	frame = CreateFrame("Frame", "WhichAltSettings", UIParent, "BackdropTemplate")
 	frame:SetSize(WIDTH, HEIGHT)
 	frame:SetPoint("CENTER")
 	frame:SetFrameStrata("DIALOG")
+	frame:SetToplevel(true)
 	frame:SetMovable(true)
 	frame:SetClampedToScreen(true)
 	frame:EnableMouse(true)
 	frame:RegisterForDrag("LeftButton")
 	frame:SetScript("OnDragStart", frame.StartMoving)
 	frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+	frame:SetScript("OnHide", UI.CloseMenu)
+	UI.Paint(frame, C.bg, C.border)
 	frame:Hide()
 	tinsert(UISpecialFrames, "WhichAltSettings") -- Escape closes it
 
-	local title = frame.TitleText
-	if not title then
-		title = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-		title:SetPoint("TOP", 0, -5)
-	end
-	title:SetText("WhichAlt Settings")
+	confirm = UI.Confirm(frame)
 
-	local pages, tabs = {}, {}
-	local function ShowTab(index)
-		for i, page in ipairs(pages) do
-			page:SetShown(i == index)
-			if i == index then tabs[i]:LockHighlight() else tabs[i]:UnlockHighlight() end
+	-- Sidebar
+	local sidebar = UI.Panel(frame, C.sidebar, C.sidebar)
+	sidebar:SetPoint("TOPLEFT", 1, -1)
+	sidebar:SetPoint("BOTTOMLEFT", 1, 1)
+	sidebar:SetWidth(SIDEBAR - 1)
+	local edge = UI.Line(sidebar)
+	edge:SetWidth(1)
+	edge:SetPoint("TOPRIGHT")
+	edge:SetPoint("BOTTOMRIGHT")
+
+	local logo = sidebar:CreateTexture(nil, "ARTWORK")
+	logo:SetTexture(ICON)
+	logo:SetSize(34, 34)
+	logo:SetPoint("TOPLEFT", 20, -22)
+	local logoText = UI.Text(sidebar, "Logo", "WhichAlt")
+	logoText:SetPoint("LEFT", logo, "RIGHT", 10, 0)
+	local logoLine = UI.Line(sidebar)
+	logoLine:SetHeight(1)
+	logoLine:SetPoint("TOPLEFT", 0, -74)
+	logoLine:SetPoint("TOPRIGHT", -1, -74)
+
+	local version = UI.Text(sidebar, "Small", "v" .. ns.VERSION)
+	version:SetPoint("BOTTOMLEFT", 22, 42)
+	local dot = sidebar:CreateTexture(nil, "ARTWORK")
+	dot:SetSize(7, 7)
+	dot:SetPoint("BOTTOMLEFT", 22, 25)
+	local dataStatus = UI.Text(sidebar, "Small")
+	dataStatus:SetPoint("LEFT", dot, "RIGHT", 7, 0)
+
+	-- Header
+	local title = UI.Text(frame, "Title")
+	title:SetPoint("TOPLEFT", SIDEBAR + PAD, -24)
+	local subtitle = UI.Text(frame, "Subtitle")
+	subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
+	subtitle:SetPoint("RIGHT", frame, "RIGHT", -70, 0)
+	local close = UI.CloseButton(frame)
+	close:SetPoint("TOPRIGHT", -16, -16)
+	close:SetScript("OnClick", function() frame:Hide() end)
+	local headerLine = UI.Line(frame)
+	headerLine:SetHeight(1)
+	headerLine:SetPoint("TOPLEFT", SIDEBAR, -94)
+	headerLine:SetPoint("TOPRIGHT", -1, -94)
+
+	-- Footer
+	local footerLine = UI.Line(frame)
+	footerLine:SetHeight(1)
+	footerLine:SetPoint("BOTTOMLEFT", SIDEBAR, 62)
+	footerLine:SetPoint("BOTTOMRIGHT", -1, 62)
+	local closeButton = UI.Button(frame, "Close", 140, true, 32)
+	closeButton:SetPoint("BOTTOMRIGHT", -PAD, 15)
+	closeButton:SetScript("OnClick", function() frame:Hide() end)
+
+	-- Pages, each with its own content and footer buttons
+	local navItems = {}
+	local function ShowPage(index)
+		UI.CloseMenu()
+		for i, page in ipairs(PAGES) do
+			page.content:SetShown(i == index)
+			page.footer:SetShown(i == index)
+			navItems[i]:SetSelected(i == index)
 		end
+		title:SetText(PAGES[index].name)
+		subtitle:SetText(PAGES[index].subtitle)
 		if index == 1 then refreshGeneral() else refreshCustomise() end
 	end
 
-	for i, name in ipairs({ "General", "Customise" }) do
-		local tab = Button(frame, name, 120)
-		tab:SetPoint("TOPLEFT", 14 + (i - 1) * 126, -30)
-		tab:SetScript("OnClick", function() ShowTab(i) end)
-		tabs[i] = tab
+	for i, page in ipairs(PAGES) do
+		local nav = UI.NavItem(sidebar, page.name, SIDEBAR - 1)
+		nav:SetPoint("TOPLEFT", 0, -88 - (i - 1) * 34)
+		nav:SetScript("OnClick", function() ShowPage(i) end)
+		navItems[i] = nav
 
-		local page = CreateFrame("Frame", nil, frame)
-		page:SetPoint("TOPLEFT", 10, -62)
-		page:SetPoint("BOTTOMRIGHT", -10, 8)
-		pages[i] = page
+		page.content = CreateFrame("Frame", nil, frame)
+		page.content:SetPoint("TOPLEFT", SIDEBAR + PAD, -116)
+		page.content:SetPoint("BOTTOMRIGHT", -PAD, 74)
+		page.footer = CreateFrame("Frame", nil, frame)
+		page.footer:SetPoint("BOTTOMLEFT", SIDEBAR + PAD, 16)
+		page.footer:SetPoint("RIGHT", closeButton, "LEFT", -12, 0)
+		page.footer:SetHeight(30)
+		page.build(page.content, page.footer)
 	end
 
-	BuildGeneral(pages[1])
-	BuildCustomise(pages[2])
+	frame:SetScript("OnShow", function()
+		local _, outdated = ns.GetDataStatus()
+		local color = outdated and WARN or GOOD
+		dot:SetColorTexture(color[1], color[2], color[3], 1)
+		dataStatus:SetText(outdated and "Data out of date" or "Data up to date")
+	end)
+
 	SelectPlayer()
-	ShowTab(1)
+	ShowPage(1)
 end
 
 function ns.ToggleSettings()

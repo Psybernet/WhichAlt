@@ -2,6 +2,12 @@
 
 All notable changes to WhichAlt. Versions follow [semantic versioning](https://semver.org/): the last number for fixes, the middle one for new features, the first for big changes.
 
+## [1.5.0] - 2026-10-26
+
+### Changed
+- New look for the settings window, styled after EllesmereUI: flat dark panels, a sidebar with the pages, version and data status, large page titles, teal switches instead of tick boxes, flat dropdowns and buttons, and confirmations shown inside the window.
+- "Restore default settings" is now "Restore defaults".
+
 ## [1.4.0] - 2026-10-26
 
 ### Added

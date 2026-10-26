@@ -16,7 +16,7 @@ Stat priorities and trinket ratings come from [Icy Veins](https://www.icy-veins.
 - **Only specs that can use the item**: it checks armor type and the item's main stat (Strength, Agility or Intellect), and weapons, shields and off-hand items follow each spec's own weapon rules. A polearm won't suggest Marksmanship Hunter, and specs that fight in two styles show which one fits, such as *Frost Death Knight (Dual Wield)*.
 - **Second best and very low ratings**: when no spec has the item's stats as its top two, it lists the specs it's second best for, or warns that the stats are very low for everyone.
 - **Trinket ratings**: the Icy Veins tier (S, A, B…) for every spec that rates the trinket.
-- **Settings window** to turn each part on or off.
+- **Settings window** in a clean dark style, with a switch for each part and the data status at a glance.
 - **Customise tab**: drag a spec's stats into your own order and save it, or add your own roles.
 - **Light on performance**: nothing runs on a timer. Results are worked out once per item and cached.
 
@@ -54,6 +54,8 @@ The full list for every spec is in the reference image below.
 
 ## Settings
 
+Left-click the minimap button or type `/walt`. Pages are listed down the left; the version and whether the data is up to date sit at the bottom of that sidebar, and the **Data** section on the General page shows where each data file came from.
+
 <img src="images/settings-general.jpg" width="640" alt="General settings tab">
 
 | Option | Default |
@@ -61,7 +63,7 @@ The full list for every spec is in the reference image below.
 | Show WhichAlt in tooltips (same as right-clicking the minimap button) | On |
 | Show lower quality ratings ("second best" and "very low") | On |
 
-**Only show tooltip for:** WhichAlt only appears on items whose binding is ticked. Off-hand items and trinkets can be switched off too.
+**Only show tooltip for:** WhichAlt only appears on items whose binding is switched on here. Off-hand items and trinkets can be switched off too.
 
 | Option | Default |
 |---|---|
