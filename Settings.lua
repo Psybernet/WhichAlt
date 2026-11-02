@@ -656,7 +656,8 @@ local function BuildCharacters(page, footer)
 	local minDD = DropdownRow(page, half + 4, -22, half, "Smallest upgrade", nil, "minUpgrade",
 		{ { 1, "1 item level" }, { 3, "3 item levels" }, { 5, "5 item levels" }, { 10, "10 item levels" }, { 15, "15 item levels" } }, 150)
 	local ruleDD = DropdownRow(page, 0, -72, half, "Counts if", nil, "upgradeRule",
-		{ { "anySpec", "Any spec can use it" }, { "currentSpec", "Current spec can use" }, { "goodStats", "Good stats for spec" } }, 170)
+		{ { "perfectAny", "Top 2 stats, any spec" }, { "perfectCurrent", "Top 2 stats, current spec" },
+		  { "goodAny", "Top 2 or tied #2, any spec" }, { "usable", "Any spec can use it" } }, 190)
 	local charsDD = DropdownRow(page, half + 4, -72, half, "Characters", nil, "upgradeChars",
 		{ { "all", "All, including you" }, { "others", "Only other characters" }, { "mailable", "Same or connected realm" } }, 170)
 

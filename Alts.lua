@@ -60,9 +60,32 @@ local function Match() return ns.Match end
 -- Reading items
 ---------------------------------------------------------------------------
 
-local function ItemLevel(link)
-	local ilvl = GetDetailedItemLevelInfo and GetDetailedItemLevelInfo(link)
-	return ilvl or 0
+local GetCurrentItemLevel = C_Item and C_Item.GetCurrentItemLevel
+
+-- Set when an item's level hasn't loaded yet, so it's read again once the
+-- game reports the item has loaded (GET_ITEM_INFO_RECEIVED).
+local pending = false
+
+-- Item level, or nil if the game hasn't loaded it yet. Reading it from the
+-- item's bag or equipment slot is the most reliable.
+local function ItemLevel(link, location)
+	if location and GetCurrentItemLevel then
+		local ok, ilvl = pcall(GetCurrentItemLevel, location)
+		if ok and ilvl and ilvl > 0 then return ilvl end
+	end
+	local ilvl = link and GetDetailedItemLevelInfo and GetDetailedItemLevelInfo(link)
+	if ilvl and ilvl > 0 then return ilvl end
+end
+
+local function SlotLocation(bag, slot)
+	if not ItemLocation then return end
+	local ok, location
+	if slot then
+		ok, location = pcall(ItemLocation.CreateFromBagAndSlot, ItemLocation, bag, slot)
+	else
+		ok, location = pcall(ItemLocation.CreateFromEquipmentSlot, ItemLocation, bag)
+	end
+	return ok and location or nil
 end
 
 local function CompactStats(link)
@@ -77,14 +100,17 @@ local function CompactStats(link)
 	return kept
 end
 
--- A record of a piece of wearable gear, or nil for anything else.
-local function GearRecord(link)
+-- A record of a piece of wearable gear, or nil for anything else. ilvl is
+-- nil while the game is still loading the item.
+local function GearRecord(link, location)
 	if not link then return end
 	local itemID, _, _, loc, _, classID, subclassID = GetItemInfoInstant(link)
 	if not itemID or not GROUPS[loc] or (classID ~= ARMOR and classID ~= WEAPON) then return end
 	local _, _, _, _, minLevel = GetItemInfo(link)
+	local ilvl = ItemLevel(link, location)
+	if not ilvl then pending = true end
 	return {
-		link = link, ilvl = ItemLevel(link), loc = loc, class = classID, sub = subclassID,
+		link = link, ilvl = ilvl, loc = loc, class = classID, sub = subclassID,
 		min = minLevel, stats = CompactStats(link),
 	}
 end
@@ -141,7 +167,7 @@ local function ScanEquipped(char)
 	char.equipped = {}
 	for _, slot in ipairs(EQUIP_SLOTS) do
 		local link = GetInventoryItemLink("player", slot)
-		local record = GearRecord(link)
+		local record = GearRecord(link, link and SlotLocation(slot))
 		if record then
 			char.equipped[slot] = { link = link, ilvl = record.ilvl, loc = record.loc }
 		end
@@ -152,7 +178,8 @@ local function ScanBags(char)
 	char.bags = {}
 	for bag = 0, NUM_BAG_SLOTS or 4 do
 		for slot = 1, GetContainerNumSlots(bag) or 0 do
-			local record = GearRecord(GetContainerItemLink(bag, slot))
+			local link = GetContainerItemLink(bag, slot)
+			local record = GearRecord(link, link and SlotLocation(bag, slot))
 			if record then
 				record.movable, record.warbound = Transfer(bag, slot)
 				char.bags[#char.bags + 1] = record
@@ -175,7 +202,8 @@ local function ScanWarband()
 		local slots = GetContainerNumSlots(bag) or 0
 		if slots > 0 then readable = true end
 		for slot = 1, slots do
-			local record = GearRecord(GetContainerItemLink(bag, slot))
+			local link = GetContainerItemLink(bag, slot)
+			local record = GearRecord(link, link and SlotLocation(bag, slot))
 			if record then
 				record.movable, record.warbound = true, true
 				items[#items + 1] = record
@@ -185,13 +213,35 @@ local function ScanWarband()
 	if readable then ns.db.warband = { items = items, seen = time() } end
 end
 
+local bankOpen = false
+local events = CreateFrame("Frame")
+local retries = 0
+
+-- Listen for item data arriving only while some item level is missing,
+-- and give up after a while so it never keeps rescanning.
+local function WatchPending()
+	if pending and retries < 20 then
+		events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+	else
+		events:UnregisterEvent("GET_ITEM_INFO_RECEIVED")
+	end
+end
+
+local function FullScan(char)
+	pending = false
+	ScanBasics(char)
+	ScanEquipped(char)
+	ScanBags(char)
+	if bankOpen then ScanWarband() end
+	WatchPending()
+end
+
 -- Records everything about this character now.
 function Alts.ScanNow()
 	local char = MyRecord()
 	if not char then return end
-	ScanBasics(char)
-	ScanEquipped(char)
-	ScanBags(char)
+	retries = 0
+	FullScan(char)
 end
 
 local function Changed()
@@ -199,7 +249,6 @@ local function Changed()
 	if ns.RefreshSettings then ns.RefreshSettings() end
 end
 
-local bankOpen = false
 local BANK_TYPES = {}
 if Enum.PlayerInteractionType then
 	for _, name in ipairs({ "Banker", "AccountBanker" }) do
@@ -207,21 +256,24 @@ if Enum.PlayerInteractionType then
 	end
 end
 
-local events = CreateFrame("Frame")
 events:SetScript("OnEvent", function(_, event, arg1)
 	if not ns.db then return end
 	local char = MyRecord()
 	if not char then return end
 	if event == "PLAYER_ENTERING_WORLD" then
-		ScanBasics(char)
-		ScanEquipped(char)
-		ScanBags(char)
+		retries = 0
+		FullScan(char)
+	elseif event == "GET_ITEM_INFO_RECEIVED" then
+		retries = retries + 1
+		FullScan(char)
 	elseif event == "PLAYER_EQUIPMENT_CHANGED" then
 		ScanEquipped(char)
 		ScanBasics(char)
+		WatchPending()
 	elseif event == "BAG_UPDATE_DELAYED" then
 		ScanBags(char)
 		if bankOpen then ScanWarband() end
+		WatchPending()
 	elseif event == "PLAYER_LEVEL_UP" then
 		char.level = arg1 or UnitLevel("player")
 	elseif event == "PLAYER_SPECIALIZATION_CHANGED" or event == "ACTIVE_TALENT_GROUP_CHANGED" then
@@ -279,18 +331,26 @@ local function SpecsOf(classFile)
 	return list
 end
 
--- The specs to check for a character under the "counts as upgrade" option.
+-- The specs to check for a character under the "Counts if" option.
 local function SpecsToCheck(char)
 	local specs = SpecsOf(char.class)
-	if ns.db.upgradeRule == "anySpec" then return specs end
+	if ns.db.upgradeRule ~= "perfectCurrent" then return specs end
 	local current = specs[char.spec or 0]
 	return current and { current } or {}
+end
+
+local function SecondaryCount(stats)
+	local count = 0
+	for key in pairs(stats or {}) do
+		if KEEP_STATS[key] then count = count + 1 end
+	end
+	return count
 end
 
 -- An item to check, from a link or a stored record.
 local function ItemFrom(link, record)
 	record = record or GearRecord(link)
-	if not record then return end
+	if not record or not record.ilvl then return end
 	local stats = record.stats or CompactStats(record.link)
 	return {
 		link = record.link, ilvl = record.ilvl, loc = record.loc, class = record.class, sub = record.sub,
@@ -298,23 +358,37 @@ local function ItemFrom(link, record)
 	}
 end
 
--- The spec this character would use the item as, or nil if none of the
--- specs being checked can (or, under "good stats only", suit it).
-local function FittingSpec(item, specs)
+-- The spec the item suits for this character, preferring their current
+-- spec, or nil. By default the item has to be a perfect match (#1 and #2
+-- stats) for the spec; "goodAny" also accepts stats tied for #2, and
+-- "usable" only checks the spec can use it. Items without two secondary
+-- stats (many trinkets) can't be judged on stats, so they only need to be
+-- usable.
+local function FittingSpec(item, specs, char)
+	local rule = ns.db.upgradeRule
+	local judgeStats = rule ~= "usable" and SecondaryCount(item.stats) >= 2
+	local current = SpecsOf(char.class)[char.spec or 0]
+	local found
 	for _, spec in ipairs(specs) do
 		if Match().SpecCanUse(spec, item.primaries, item.class, item.sub, item.loc) then
-			if ns.db.upgradeRule ~= "goodStats" then return spec end
-			local tier = item.stats and Match().MatchSpec(spec, item.stats)
-			if tier and tier <= Match().GOOD then return spec end
+			local suits = true
+			if judgeStats then
+				local tier = Match().MatchSpec(spec, item.stats)
+				suits = tier == Match().PERFECT or (rule == "goodAny" and tier == Match().GOOD)
+			end
+			if suits then
+				if spec == current then return spec end
+				found = found or spec
+			end
 		end
 	end
+	return found
 end
 
 -- Item level of what the character wears where this item would go. Rings,
 -- trinkets and dual wielded weapons compare with the weaker of the two.
-local function EquippedLevel(char, item)
+local function EquippedLevelOrZero(char, item, at)
 	local eq = char.equipped or {}
-	local function at(slot) return eq[slot] and eq[slot].ilvl or 0 end
 	local slots = GROUP_SLOTS[item.group]
 	if slots then
 		if #slots == 2 then return math.min(at(slots[1]), at(slots[2])) end
@@ -335,14 +409,34 @@ local function EquippedLevel(char, item)
 	return 0
 end
 
+-- Empty slots count as 0. Returns nil if any item involved has no known
+-- item level yet, so nothing is called an upgrade over unknown gear.
+local function EquippedLevel(char, item)
+	local eq = char.equipped or {}
+	local unknown = false
+	local function at(slot)
+		local worn = eq[slot]
+		if not worn then return 0 end
+		if not worn.ilvl or worn.ilvl <= 0 then
+			unknown = true
+			return 0
+		end
+		return worn.ilvl
+	end
+	local level = EquippedLevelOrZero(char, item, at)
+	if unknown then return nil end
+	return level
+end
+
 -- Best item level the character already has waiting for this slot: worn,
 -- in their bags, or in the Warband bank.
 local function StoredLevel(char, item, specs)
 	local best = EquippedLevel(char, item)
+	if not best then return nil end
 	local lists = { char.bags or {}, ns.db.warband and ns.db.warband.items or {} }
 	for _, list in ipairs(lists) do
 		for _, record in ipairs(list) do
-			if record.link ~= item.link and GROUPS[record.loc] == item.group and record.ilvl > best then
+			if record.link ~= item.link and GROUPS[record.loc] == item.group and record.ilvl and record.ilvl > best then
 				local stored = ItemFrom(nil, record)
 				for _, spec in ipairs(specs) do
 					if Match().SpecCanUse(spec, stored.primaries, stored.class, stored.sub, stored.loc) then
@@ -359,19 +453,22 @@ end
 -- Upgrade details for one character, or nil if it isn't an upgrade for them.
 local function Evaluate(char, item)
 	local specs = SpecsToCheck(char)
-	if not FittingSpec(item, specs) then return end
+	local spec = FittingSpec(item, specs, char)
+	if not spec then return end
 
 	local tooLow = item.min and char.level and item.min > char.level
-	local baseline = tooLow and StoredLevel(char, item, specs) or EquippedLevel(char, item)
+	local baseline
+	if tooLow then
+		baseline = StoredLevel(char, item, specs)
+	else
+		baseline = EquippedLevel(char, item)
+	end
+	if not baseline then return end
 	local gain = item.ilvl - baseline
 	if gain < (ns.db.minUpgrade or 1) then return end
 
-	local current = SpecsOf(char.class)[char.spec or 0]
-	local tier
-	if current and item.stats and Match().SpecCanUse(current, item.primaries, item.class, item.sub, item.loc) then
-		tier = Match().MatchSpec(current, item.stats)
-	end
-	return { char = char, gain = gain, empty = baseline == 0, tooLow = tooLow, need = item.min, spec = current, tier = tier }
+	local tier = item.stats and Match().MatchSpec(spec, item.stats)
+	return { char = char, gain = gain, empty = baseline == 0, tooLow = tooLow, need = item.min, spec = spec, tier = tier }
 end
 
 local function SameMailRealm(a, b)
@@ -436,8 +533,10 @@ end
 -- character you're on.
 function Alts.UpgradeLines(link, bindOption)
 	if not ns.db or not ns.db.chars then return end
-	local item = ItemFrom(link)
-	if not item then return end
+	local record = GearRecord(link)
+	if not record then return end
+	local item = ItemFrom(nil, record)
+	if not item then return nil, true end -- item level not loaded yet
 	local me = ns.db.chars[MyKey() or ""]
 	local movable = bindOption ~= "showSoulbound"
 	local warbound = bindOption == "showWarbound"

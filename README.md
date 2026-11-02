@@ -97,10 +97,12 @@ Your roles show in the tooltip in brackets, for example *Windwalker Monk (Master
 
 Log in to each of your characters once with WhichAlt installed. It records their level, spec, item level, what they're wearing and the gear in their bags, and it records the Warband bank whenever you open your bank. After that, item tooltips say who the item is an upgrade for:
 
-- *Upgrade for Detour (+12 item level, perfect stats for Guardian)*: higher item level than what Detour wears in that slot. Rings, trinkets and dual-wielded weapons compare with the weaker of the two.
+- *Upgrade for Detour (+12 item level, perfect stats for Feral)*: higher item level than what Detour wears in that slot, and by default the item has the #1 and #2 stats for one of Detour's specs. Rings, trinkets and dual-wielded weapons compare with the weaker of the two.
 - *Upgrade for Greennemh at level 90 (+15 better than their gear, bags and the Warband bank)*: the character can't wear it yet, so it's compared with the best they already have waiting for that slot.
 
-Soulbound items only count for the character you're on. Everything is updated from game events (logging in, changing gear, bag changes, opening the bank); nothing runs on a timer.
+Soulbound items only count for the character you're on. Gear whose item level the game hasn't loaded yet is never treated as an empty slot; WhichAlt reads it again once it loads. Everything is updated from game events (logging in, changing gear, bag changes, opening the bank, item data loading); nothing runs on a timer.
+
+The WhichAlt section has a thin line above and below it, so it stands apart from other addons' tooltip lines.
 
 ### Characters page
 
@@ -108,7 +110,7 @@ Soulbound items only count for the character you're on. Everything is updated fr
 |---|---|---|
 | Show upgrades | On or off | On |
 | Smallest upgrade | 1, 3, 5, 10 or 15 item levels | 1 |
-| Counts if | Any of their specs can use it, their current spec can use it, or it has good or perfect stats for their current spec | Any spec |
+| Counts if | Top 2 stats (perfect match) for any of their specs, top 2 stats for their current spec, top 2 or tied #2 stats for any spec, or any spec can use it (ignores stats). Items without two secondary stats, such as many trinkets, only need to be usable | Top 2 stats, any spec |
 | Characters | All (including you), only your other characters, or only characters on the same or a connected realm (Warbound items count everywhere) | All |
 
 Below the options is every character WhichAlt knows about, with **Forget** for each one and **Clear database** at the bottom (both ask first).

@@ -21,7 +21,7 @@ ns.DEFAULTS = {
 	showSoulbound = false,   -- Soulbound and Bind on Pickup items
 	matchStyle = "grouped",  -- "grouped" (Perfect / Good match headings) or "list"
 	showUpgrades = true,     -- "Upgrade for <character>" lines
-	upgradeRule = "anySpec", -- "anySpec", "currentSpec" or "goodStats"
+	upgradeRule = "perfectAny", -- "perfectAny", "perfectCurrent", "goodAny" or "usable"
 	upgradeChars = "all",    -- "all", "others" or "mailable"
 	minUpgrade = 1,          -- smallest item level gain that counts
 }
@@ -374,11 +374,14 @@ local function GetCachedLines(link, itemID, classID, subclassID, equipLoc, bindO
 	if not matches then return end -- stats not loaded yet; try again next time
 
 	lines = {}
+	local waiting = false -- item level not loaded yet, so don't cache
 	if ns.db.showUpgrades and ns.Alts then
-		local ok, upgrades = pcall(ns.Alts.UpgradeLines, link, bindOption)
+		local ok, upgrades, notReady = pcall(ns.Alts.UpgradeLines, link, bindOption)
+		waiting = ok and notReady
 		for _, line in ipairs(ok and upgrades or {}) do lines[#lines + 1] = line end
 	end
 	for _, line in ipairs(matches) do lines[#lines + 1] = line end
+	if waiting then return lines end
 
 	if cacheSize >= 300 then ns.ClearCache() end
 	cache[key] = lines
@@ -414,6 +417,39 @@ local function GetBindOption(data)
 	return "showBoE"
 end
 
+-- Thin lines above and below the WhichAlt section, drawn across a blank
+-- tooltip line so the section stands apart from other addons' lines. They
+-- follow the tooltip's width and hide when the tooltip is cleared.
+local SEPARATOR_COLOR = { 0.45, 0.47, 0.50, 0.8 }
+
+local function HideSeparators(tooltip)
+	for _, line in pairs(tooltip.WhichAltSeparators or {}) do line:Hide() end
+end
+
+local function PlaceSeparator(tooltip, key, lineIndex)
+	local name = tooltip.GetName and tooltip:GetName()
+	local text = name and _G[name .. "TextLeft" .. lineIndex]
+	if not text or not tooltip.CreateTexture then return end
+	if not tooltip.WhichAltSeparators then
+		tooltip.WhichAltSeparators = {}
+		tooltip:HookScript("OnTooltipCleared", HideSeparators)
+		tooltip:HookScript("OnSizeChanged", function(self, width)
+			for _, line in pairs(self.WhichAltSeparators) do line:SetWidth(math.max(1, width - 20)) end
+		end)
+	end
+	local line = tooltip.WhichAltSeparators[key]
+	if not line then
+		line = tooltip:CreateTexture(nil, "ARTWORK")
+		line:SetColorTexture(unpack(SEPARATOR_COLOR))
+		line:SetHeight(1)
+		tooltip.WhichAltSeparators[key] = line
+	end
+	line:ClearAllPoints()
+	line:SetPoint("LEFT", text, "LEFT", 0, 0)
+	line:SetWidth(math.max(1, tooltip:GetWidth() - 20))
+	line:Show()
+end
+
 local function OnTooltipItem(tooltip, data)
 	local db = ns.db
 	if not db or not db.enabled or not tooltip.GetItem or not data then return end
@@ -432,10 +468,13 @@ local function OnTooltipItem(tooltip, data)
 	if not ok or not lines or #lines == 0 then return end
 
 	tooltip:AddLine(" ")
+	if tooltip.NumLines then PlaceSeparator(tooltip, "top", tooltip:NumLines()) end
 	tooltip:AddLine("|T" .. ICON .. ":14|t WhichAlt", 1, 0.82, 0)
 	for _, line in ipairs(lines) do
 		tooltip:AddLine(line, 1, 1, 1, true)
 	end
+	tooltip:AddLine(" ")
+	if tooltip.NumLines then PlaceSeparator(tooltip, "bottom", tooltip:NumLines()) end
 end
 
 TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, OnTooltipItem)
@@ -547,6 +586,9 @@ loader:SetScript("OnEvent", function(self, _, name)
 	-- Older versions had one "Only Bind on Equip and Warbound items" option.
 	if ns.db.bindOnly == false then ns.db.showSoulbound = true end
 	ns.db.bindOnly = nil
+	-- 1.6.0's upgrade rules were replaced by top-2-stats rules in 1.6.1.
+	local rules = { perfectAny = true, perfectCurrent = true, goodAny = true, usable = true }
+	if ns.db.upgradeRule and not rules[ns.db.upgradeRule] then ns.db.upgradeRule = nil end
 	for key, value in pairs(ns.DEFAULTS) do
 		if ns.db[key] == nil then ns.db[key] = value end
 	end
