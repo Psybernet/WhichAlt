@@ -19,6 +19,11 @@ ns.DEFAULTS = {
 	showBoE = true,          -- Bind on Equip (and Bind on Use) items
 	showWarbound = true,     -- Warbound and Warbound until equipped items
 	showSoulbound = false,   -- Soulbound and Bind on Pickup items
+	matchStyle = "grouped",  -- "grouped" (Perfect / Good match headings) or "list"
+	showUpgrades = true,     -- "Upgrade for <character>" lines
+	upgradeRule = "anySpec", -- "anySpec", "currentSpec" or "goodStats"
+	upgradeChars = "all",    -- "all", "others" or "mailable"
+	minUpgrade = 1,          -- smallest item level gain that counts
 }
 
 ---------------------------------------------------------------------------
@@ -56,9 +61,15 @@ local SECONDARY_KEYS = {
 	"ITEM_MOD_VERSATILITY",
 }
 
--- How well an item's secondaries suit a build.
-local TOP, SECOND_BEST = 1, 2
+-- How well an item's secondaries suit a build:
+--   PERFECT     the build's #1 stat (or one tied for #1) plus a #2
+--   GOOD        two stats tied for #2, without the #1
+--   SECOND_BEST two stats within the first three priority levels
+local PERFECT, GOOD, SECOND_BEST = 1, 2, 3
 
+local PERFECT_HEADER = "|cff0dc799Perfect match|r  |cff8a8f99#1 and #2 stats|r"
+local GOOD_HEADER = "|cffb4bcc8Good match|r  |cff8a8f99stats tied for #2|r"
+local GOOD_TAG = "  |cff8a8f99(good)|r"
 local SECOND_BEST_HEADER = "|cffaaaaaaLower quality for all specs, but second best for:|r"
 local VERY_LOW_LINE = "|cffff5555Very low stats for all specs, not recommended|r"
 local NOT_RATED_LINE = "|cffaaaaaaNot rated|r"
@@ -139,20 +150,23 @@ local function GetPrimaries(stats)
 	return found
 end
 
--- TOP if two of the item's stats are in the build's best two places (ties
--- share a place, so "Crit > Mastery = Vers" puts all three there).
--- SECOND_BEST if two are within the first three priority levels, counting
--- tied stats as one level. nil when every pairing needs a level 4 stat.
+-- Places count ties as sharing a spot, so "Crit > Mastery = Vers > Haste"
+-- has Crit 1st and Mastery and Vers both 2nd. Levels count tied stats as
+-- one level, so Haste there is level 3. nil when every pairing needs a
+-- level 4 stat.
 local function BuildTier(build, stats)
-	local top, near = 0, 0
+	local first, top, near = 0, 0, 0
 	for key, place in pairs(build.place) do
 		if stats[key] then
+			if place == 1 then first = first + 1 end
 			if place <= 2 then top = top + 1 end
 			if build.level[key] <= 3 then near = near + 1 end
 		end
 	end
-	if top >= 2 then
-		return TOP
+	if top >= 2 and first >= 1 then
+		return PERFECT
+	elseif top >= 2 then
+		return GOOD
 	elseif near >= 2 then
 		return SECOND_BEST
 	end
@@ -196,6 +210,24 @@ end
 local function SpecName(spec)
 	return spec.spec .. " " .. ns.ClassGear[spec.class].name
 end
+
+-- True if the spec can use the item at all: main stat, armor, and for
+-- weapons, shields and off-hands its weapon rules.
+local function SpecCanUse(spec, primaries, classID, subclassID, equipLoc)
+	if primaries and not primaries[spec.primary] then return false end
+	local gear = ns.ClassGear[spec.class]
+	if IsWeaponSlot(classID, equipLoc) then
+		return (WeaponFit(spec, gear, classID, subclassID, equipLoc))
+	end
+	return CanEquip(gear, classID, subclassID, equipLoc)
+end
+
+-- Shared with the character database (Alts.lua).
+ns.Match = {
+	PERFECT = PERFECT, GOOD = GOOD, SECOND_BEST = SECOND_BEST,
+	GetPrimaries = GetPrimaries, MatchSpec = MatchSpec, SpecCanUse = SpecCanUse,
+	SpecName = SpecName, ColorByClass = ColorByClass,
+}
 
 -- Lines for a rated trinket: one per tier, listing each spec at its best
 -- tier. Content (Raid, Mythic+, hero talent) goes in brackets when the
@@ -269,7 +301,7 @@ local function GetMatchLines(link, itemID, classID, subclassID, equipLoc)
 
 	local primaries = GetPrimaries(stats)
 	local isWeapon = IsWeaponSlot(classID, equipLoc)
-	local top, second = {}, {}
+	local perfect, good, second = {}, {}, {}
 	for _, spec in ipairs(ns.Specs) do
 		local gear = ns.ClassGear[spec.class]
 		local fits, weaponLabel
@@ -289,14 +321,28 @@ local function GetMatchLines(link, itemID, classID, subclassID, equipLoc)
 				elseif label or weaponLabel then
 					text = text .. " (" .. (label or weaponLabel) .. ")"
 				end
-				local list = tier == TOP and top or second
+				local list = tier == PERFECT and perfect or tier == GOOD and good or second
 				list[#list + 1] = ColorByClass(spec.class, text)
 			end
 		end
 	end
 
-	if #top > 0 then
-		return top
+	if #perfect + #good > 0 then
+		local lines = {}
+		if ns.db.matchStyle == "list" then
+			for _, line in ipairs(perfect) do lines[#lines + 1] = line end
+			for _, line in ipairs(good) do lines[#lines + 1] = line .. GOOD_TAG end
+		else
+			if #perfect > 0 then
+				lines[#lines + 1] = PERFECT_HEADER
+				for _, line in ipairs(perfect) do lines[#lines + 1] = line end
+			end
+			if #good > 0 then
+				lines[#lines + 1] = GOOD_HEADER
+				for _, line in ipairs(good) do lines[#lines + 1] = line end
+			end
+		end
+		return lines
 	elseif not ns.db.showLowerQuality then
 		return {}
 	elseif #second > 0 then
@@ -316,15 +362,26 @@ function ns.ClearCache()
 	cacheSize = 0
 end
 
-local function GetCachedLines(link, itemID, classID, subclassID, equipLoc)
-	local lines = cache[link]
+-- Upgrade lines ("Upgrade for <character>") come first, then the spec
+-- matches. Binding matters for upgrades (soulbound items can't move), so
+-- it's part of the cache key.
+local function GetCachedLines(link, itemID, classID, subclassID, equipLoc, bindOption)
+	local key = bindOption .. link
+	local lines = cache[key]
 	if lines then return lines end
 
-	lines = GetMatchLines(link, itemID, classID, subclassID, equipLoc)
-	if not lines then return end -- stats not loaded yet; try again next time
+	local matches = GetMatchLines(link, itemID, classID, subclassID, equipLoc)
+	if not matches then return end -- stats not loaded yet; try again next time
+
+	lines = {}
+	if ns.db.showUpgrades and ns.Alts then
+		local ok, upgrades = pcall(ns.Alts.UpgradeLines, link, bindOption)
+		for _, line in ipairs(ok and upgrades or {}) do lines[#lines + 1] = line end
+	end
+	for _, line in ipairs(matches) do lines[#lines + 1] = line end
 
 	if cacheSize >= 300 then ns.ClearCache() end
-	cache[link] = lines
+	cache[key] = lines
 	cacheSize = cacheSize + 1
 	return lines
 end
@@ -371,7 +428,7 @@ local function OnTooltipItem(tooltip, data)
 	local okBind, bindOption = pcall(GetBindOption, data)
 	if not okBind or not db[bindOption] then return end
 
-	local ok, lines = pcall(GetCachedLines, link, itemID, classID, subclassID, equipLoc)
+	local ok, lines = pcall(GetCachedLines, link, itemID, classID, subclassID, equipLoc, bindOption)
 	if not ok or not lines or #lines == 0 then return end
 
 	tooltip:AddLine(" ")
@@ -508,6 +565,7 @@ loader:SetScript("OnEvent", function(self, _, name)
 		end
 	end
 	ns.LoadRoles()
+	ns.Alts.Start()
 
 	-- Once per game patch, mention in chat if the data is from an older one.
 	local _, outdated, game = ns.GetDataStatus()

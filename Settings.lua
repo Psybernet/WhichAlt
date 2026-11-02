@@ -7,7 +7,7 @@ local _, ns = ...
 local UI = ns.UI
 local C = UI.COLORS
 
-local WIDTH, HEIGHT = 880, 600
+local WIDTH, HEIGHT = 880, 660
 local SIDEBAR = 200
 local PAD = 28
 local PAGE_WIDTH = WIDTH - SIDEBAR - PAD * 2
@@ -15,7 +15,8 @@ local MAX_ROLE_NAME = 30
 local ICON = "Interface\\AddOns\\WhichAlt\\Media\\WA"
 
 local frame
-local refreshGeneral, refreshCustomise
+local refreshGeneral, refreshCustomise, refreshCharacters, refreshUpgrades
+local currentPage = 1
 local confirm -- confirm(message, onYes), set when the window is built
 
 local function ClassColored(classFile, text)
@@ -74,6 +75,35 @@ local function ToggleRow(parent, x, y, width, label, desc, onChange)
 	return toggle
 end
 
+-- A setting row with a dropdown of choices on the right. choices is a list
+-- of { value, text }; picking one sets ns.db[key].
+local function DropdownRow(parent, x, y, width, label, desc, key, choices, ddWidth)
+	local row = UI.Panel(parent)
+	row:SetSize(width, 46)
+	row:SetPoint("TOPLEFT", x, y)
+	local title = UI.Text(row, "Label", label)
+	title:SetPoint("TOPLEFT", 14, -8)
+	ddWidth = ddWidth or 160
+	if desc then
+		local note = UI.Text(row, "Small", desc)
+		note:SetPoint("TOPLEFT", 14, -27)
+		note:SetPoint("RIGHT", row, "RIGHT", -(ddWidth + 24), 0)
+		note:SetWordWrap(false)
+	end
+	local dd
+	dd = UI.Dropdown(row, ddWidth, function(add)
+		for _, choice in ipairs(choices) do
+			add(choice[2], ns.db[key] == choice[1], function()
+				ns.db[key] = choice[1]
+				ns.ClearCache()
+				dd:Refresh()
+			end)
+		end
+	end)
+	dd:SetPoint("RIGHT", -10, 0)
+	return dd
+end
+
 ---------------------------------------------------------------------------
 -- General page
 ---------------------------------------------------------------------------
@@ -115,19 +145,22 @@ local function BuildGeneral(page, footer)
 	for i, option in ipairs(MAIN_OPTIONS) do
 		Add(option, 0, -22 - (i - 1) * 50, PAGE_WIDTH)
 	end
+	local styleDD = DropdownRow(page, 0, -122, PAGE_WIDTH, "Match list style",
+		"Grouped puts Perfect match and Good match under headings; One list tags good matches instead.",
+		"matchStyle", { { "grouped", "Grouped" }, { "list", "One list" } })
 
 	local filters = UI.Section(page, "Only show tooltip for")
-	filters:SetPoint("TOPLEFT", 0, -130)
+	filters:SetPoint("TOPLEFT", 0, -180)
 	local half = (PAGE_WIDTH - 4) / 2
 	for i, option in ipairs(FILTER_OPTIONS) do
 		local col, line = (i - 1) % 2, math.floor((i - 1) / 2)
-		Add(option, col * (half + 4), -152 - line * 50, half)
+		Add(option, col * (half + 4), -202 - line * 50, half)
 	end
 
 	local data = UI.Section(page, "Data")
-	data:SetPoint("TOPLEFT", 0, -314)
+	data:SetPoint("TOPLEFT", 0, -364)
 	local about = UI.Text(page, "Small")
-	about:SetPoint("TOPLEFT", 0, -336)
+	about:SetPoint("TOPLEFT", 0, -386)
 	about:SetWidth(PAGE_WIDTH)
 	about:SetSpacing(4)
 
@@ -147,6 +180,7 @@ local function BuildGeneral(page, footer)
 		for _, toggle in ipairs(toggles) do
 			toggle:SetChecked(ns.db[toggle.key])
 		end
+		styleDD:Refresh()
 		local lines, outdated, game = ns.GetDataStatus()
 		if outdated then
 			lines[#lines + 1] = Colored(WARN, "Some data is from an older patch than the game (" .. game .. "). Check for a WhichAlt update.")
@@ -589,12 +623,217 @@ local function BuildCustomise(page, footer)
 end
 
 ---------------------------------------------------------------------------
+-- Characters page: upgrade options and the character database
+---------------------------------------------------------------------------
+
+local function Ago(seconds)
+	if not seconds then return "never" end
+	local days = math.floor((time() - seconds) / 86400)
+	if days <= 0 then return "today" end
+	if days == 1 then return "yesterday" end
+	return days .. " days ago"
+end
+
+local function SpecNameOf(char)
+	local index = 0
+	for _, spec in ipairs(ns.Specs) do
+		if spec.class == char.class then
+			index = index + 1
+			if index == char.spec then return spec.spec end
+		end
+	end
+	return "-"
+end
+
+local function BuildCharacters(page, footer)
+	local options = UI.Section(page, "Upgrades in tooltips")
+	options:SetPoint("TOPLEFT", 0, 0)
+	local half = (PAGE_WIDTH - 4) / 2
+
+	local showUpgrades = ToggleRow(page, 0, -22, half, "Show upgrades", "\"Upgrade for <character>\" lines.", function(on)
+		SetOption("showUpgrades", on)
+	end)
+	local minDD = DropdownRow(page, half + 4, -22, half, "Smallest upgrade", nil, "minUpgrade",
+		{ { 1, "1 item level" }, { 3, "3 item levels" }, { 5, "5 item levels" }, { 10, "10 item levels" }, { 15, "15 item levels" } }, 150)
+	local ruleDD = DropdownRow(page, 0, -72, half, "Counts if", nil, "upgradeRule",
+		{ { "anySpec", "Any spec can use it" }, { "currentSpec", "Current spec can use" }, { "goodStats", "Good stats for spec" } }, 170)
+	local charsDD = DropdownRow(page, half + 4, -72, half, "Characters", nil, "upgradeChars",
+		{ { "all", "All, including you" }, { "others", "Only other characters" }, { "mailable", "Same or connected realm" } }, 170)
+
+	local listSection = UI.Section(page, "Characters")
+	listSection:SetPoint("TOPLEFT", 0, -134)
+	local headers = { { "Name", 12 }, { "Level", 230 }, { "Spec", 290 }, { "Item level", 410 }, { "Last seen", 490 } }
+	for _, header in ipairs(headers) do
+		local text = UI.Text(page, "Small", header[1])
+		text:SetPoint("TOPLEFT", header[2], -158)
+	end
+
+	local listHeight = HEIGHT - 116 - 74 - 178
+	local list = UI.List(page, PAGE_WIDTH, listHeight, 44, function(parent)
+		local row = UI.Panel(parent)
+		row.name = UI.Text(row, "Label")
+		row.name:SetPoint("TOPLEFT", 12, -6)
+		row.realm = UI.Text(row, "Small")
+		row.realm:SetPoint("TOPLEFT", 12, -23)
+		row.level = UI.Text(row, "Normal")
+		row.level:SetPoint("LEFT", 230, 0)
+		row.spec = UI.Text(row, "Normal")
+		row.spec:SetPoint("LEFT", 290, 0)
+		row.ilvl = UI.Text(row, "Normal")
+		row.ilvl:SetPoint("LEFT", 410, 0)
+		row.seen = UI.Text(row, "Small")
+		row.seen:SetPoint("LEFT", 490, 0)
+		row.forget = UI.Button(row, "Forget", 64, false, 24)
+		row.forget:SetPoint("RIGHT", -8, 0)
+		row.forget:SetScript("OnClick", function(self)
+			local char = self:GetParent().char
+			confirm("Forget " .. char.name .. "-" .. char.realm .. "?\nTheir gear is recorded again next time you log in to them.", function()
+				ns.Alts.Forget(char.key)
+			end)
+		end)
+		return row
+	end, function(row, char)
+		row.char = char
+		local you = char.key == ns.Alts.MyKey()
+		row.name:SetText(ns.Match.ColorByClass(char.class, char.name) .. (you and Colored(C.muted, "  (you)") or ""))
+		row.realm:SetText(char.realm)
+		row.level:SetText(char.level or "-")
+		row.spec:SetText(SpecNameOf(char))
+		row.ilvl:SetText(char.ilvl or "-")
+		row.seen:SetText(you and "now" or Ago(char.seen))
+	end)
+	list.frame:SetPoint("TOPLEFT", 0, -178)
+
+	local empty = UI.Text(page, "Small", "Log in to each of your characters once with WhichAlt to add them here.")
+	empty:SetPoint("TOPLEFT", 0, -186)
+
+	local clear = UI.Button(footer, "Clear database", 160)
+	clear:SetPoint("LEFT", 0, 0)
+	local flash = FlashText(footer)
+	flash:SetPoint("LEFT", clear, "RIGHT", 14, 0)
+	clear:SetScript("OnClick", function()
+		confirm("Clear the character database?\nEvery character and the Warband bank record is removed. This character is recorded again straight away.", function()
+			ns.Alts.ClearAll()
+			flash:Flash("Database cleared", GOOD)
+		end)
+	end)
+
+	refreshCharacters = function()
+		showUpgrades:SetChecked(ns.db.showUpgrades)
+		minDD:Refresh()
+		ruleDD:Refresh()
+		charsDD:Refresh()
+		local chars = ns.Alts.SortedChars()
+		list:SetItems(chars)
+		empty:SetShown(#chars == 0)
+	end
+end
+
+---------------------------------------------------------------------------
+-- Upgrades page: everything stored that's an upgrade for someone
+---------------------------------------------------------------------------
+
+local GetItemInfoInstant = C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
+
+local function BuildUpgrades(page, footer)
+	local section = UI.Section(page, "Available upgrades")
+	section:SetPoint("TOPLEFT", 0, 0)
+
+	local listHeight = HEIGHT - 116 - 74 - 24
+	local list = UI.List(page, PAGE_WIDTH, listHeight, 34, function(parent)
+		local row = CreateFrame("Button", nil, parent, "BackdropTemplate")
+		row.heading = UI.Text(row, "Label")
+		row.heading:SetPoint("LEFT", 4, -2)
+		row.icon = row:CreateTexture(nil, "ARTWORK")
+		row.icon:SetSize(22, 22)
+		row.icon:SetPoint("LEFT", 12, 0)
+		row.item = UI.Text(row, "Normal")
+		row.item:SetPoint("LEFT", 42, 0)
+		row.item:SetWidth(250)
+		row.item:SetWordWrap(false)
+		row.where = UI.Text(row, "Small")
+		row.where:SetPoint("LEFT", 300, 0)
+		row.where:SetWidth(220)
+		row.where:SetWordWrap(false)
+		row.gain = UI.Text(row, "Normal")
+		row.gain:SetPoint("RIGHT", -12, 0)
+		row:SetScript("OnEnter", function(self)
+			if not self.link then return end
+			UI.Paint(self, C.hover, C.border)
+			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+			GameTooltip:SetHyperlink(self.link)
+			GameTooltip:Show()
+		end)
+		row:SetScript("OnLeave", function(self)
+			if self.link then UI.Paint(self, C.panel, C.border) end
+			GameTooltip:Hide()
+		end)
+		return row
+	end, function(row, entry)
+		local isHeading = entry.heading ~= nil
+		row.heading:SetShown(isHeading)
+		row.icon:SetShown(not isHeading)
+		row.item:SetShown(not isHeading)
+		row.where:SetShown(not isHeading)
+		row.gain:SetShown(not isHeading)
+		if isHeading then
+			row.link = nil
+			row:SetBackdrop(nil)
+			row.heading:SetText(entry.heading)
+			return
+		end
+		UI.Paint(row, C.panel, C.border)
+		local record, result = entry.record, entry.result
+		row.link = record.link
+		local _, _, _, _, icon = GetItemInfoInstant(record.link)
+		row.icon:SetTexture(icon)
+		row.item:SetText(record.link .. Colored(C.muted, "  " .. record.ilvl))
+		local where = (ns.Alts.GROUP_NAMES[entry.group] or "") .. " · " .. entry.source
+		if result.tooLow then where = where .. " · at level " .. result.need end
+		row.where:SetText(where)
+		row.gain:SetText(Colored(GOOD, result.empty and "empty slot" or ("+" .. math.floor(result.gain + 0.5))))
+	end)
+	list.frame:SetPoint("TOPLEFT", 0, -24)
+
+	local empty = UI.Text(page, "Small", "No upgrades found. Gear in your characters' bags and the Warband bank is checked; open your bank once so WhichAlt can see it.")
+	empty:SetPoint("TOPLEFT", 0, -30)
+	empty:SetWidth(PAGE_WIDTH)
+
+	local refresh = UI.Button(footer, "Refresh", 120)
+	refresh:SetPoint("LEFT", 0, 0)
+	local bankNote = UI.Text(footer, "Small")
+	bankNote:SetPoint("LEFT", refresh, "RIGHT", 14, 0)
+
+	refreshUpgrades = function()
+		local items = {}
+		for _, group in ipairs(ns.Alts.AllUpgrades()) do
+			local char = group.char
+			local heading = ns.Match.ColorByClass(char.class, group.isMe and (char.name .. " (you)") or char.name)
+				.. Colored(C.muted, "   level " .. (char.level or "?") .. " · " .. SpecNameOf(char) .. " · item level " .. (char.ilvl or "?"))
+			items[#items + 1] = { heading = heading }
+			for _, entry in ipairs(group.entries) do items[#items + 1] = entry end
+		end
+		list:SetItems(items)
+		empty:SetShown(#items == 0)
+		local warband = ns.db.warband
+		bankNote:SetText(warband and ("Warband bank recorded " .. Ago(warband.seen)) or "Warband bank not recorded yet: open your bank once")
+	end
+	refresh:SetScript("OnClick", function() refreshUpgrades() end)
+end
+
+---------------------------------------------------------------------------
 -- Window: sidebar, header, pages and footer
 ---------------------------------------------------------------------------
 
 local PAGES = {
-	{ name = "General", subtitle = "Choose when WhichAlt adds its section to item tooltips.", build = BuildGeneral },
-	{ name = "Customise", subtitle = "Drag a role's stats into your order, pick > or = between them, then Save. Or add your own roles.", build = BuildCustomise },
+	{ name = "General", subtitle = "Choose when WhichAlt adds its section to item tooltips.", build = BuildGeneral,
+	  refresh = function() refreshGeneral() end },
+	{ name = "Customise", subtitle = "Drag a role's stats into your order, pick > or = between them, then Save. Or add your own roles.", build = BuildCustomise,
+	  refresh = function() refreshCustomise() end },
+	{ name = "Characters", subtitle = "Your characters, and how WhichAlt decides what counts as an upgrade for them.", build = BuildCharacters,
+	  refresh = function() refreshCharacters() end },
+	{ name = "Upgrades", subtitle = "Gear in your characters' bags and the Warband bank that's an upgrade for one of them.", build = BuildUpgrades,
+	  refresh = function() refreshUpgrades() end },
 }
 
 local function CreateWindow()
@@ -679,7 +918,8 @@ local function CreateWindow()
 		end
 		title:SetText(PAGES[index].name)
 		subtitle:SetText(PAGES[index].subtitle)
-		if index == 1 then refreshGeneral() else refreshCustomise() end
+		currentPage = index
+		PAGES[index].refresh()
 	end
 
 	for i, page in ipairs(PAGES) do
@@ -715,6 +955,7 @@ function ns.ToggleSettings()
 end
 
 -- Called when a setting changes from outside the window (minimap right-click).
+-- Also called when the character database changes.
 function ns.RefreshSettings()
-	if frame and frame:IsShown() then refreshGeneral() end
+	if frame and frame:IsShown() then PAGES[currentPage].refresh() end
 end

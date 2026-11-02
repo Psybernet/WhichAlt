@@ -376,6 +376,74 @@ function UI.EditBox(parent, width, placeholder)
 end
 
 ---------------------------------------------------------------------------
+-- Scrolling list
+---------------------------------------------------------------------------
+
+-- A list that scrolls with the mouse wheel and shows a thin scrollbar when
+-- needed. list:SetItems(items) shows one row per item: rows are made by
+-- makeRow(parent) and filled by fillRow(row, item).
+function UI.List(parent, width, height, rowHeight, makeRow, fillRow)
+	local scroll = CreateFrame("ScrollFrame", nil, parent)
+	scroll:SetSize(width, height)
+	local child = CreateFrame("Frame", nil, scroll)
+	child:SetSize(width - 12, 1)
+	scroll:SetScrollChild(child)
+
+	local track = scroll:CreateTexture(nil, "ARTWORK")
+	track:SetColorTexture(C.panel[1], C.panel[2], C.panel[3], 1)
+	track:SetPoint("TOPRIGHT")
+	track:SetPoint("BOTTOMRIGHT")
+	track:SetWidth(4)
+	local thumb = scroll:CreateTexture(nil, "OVERLAY")
+	thumb:SetColorTexture(C.borderHover[1], C.borderHover[2], C.borderHover[3], 1)
+	thumb:SetWidth(4)
+
+	local function UpdateThumb()
+		local total, view = child:GetHeight(), scroll:GetHeight()
+		local fits = total <= view
+		track:SetShown(not fits)
+		thumb:SetShown(not fits)
+		if fits then return end
+		local size = math.max(24, view * view / total)
+		local offset = (view - size) * scroll:GetVerticalScroll() / (total - view)
+		thumb:SetHeight(size)
+		thumb:ClearAllPoints()
+		thumb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, -offset)
+	end
+
+	local function ScrollTo(value)
+		local max = math.max(0, child:GetHeight() - scroll:GetHeight())
+		scroll:SetVerticalScroll(math.min(max, math.max(0, value)))
+		UpdateThumb()
+	end
+
+	scroll:EnableMouseWheel(true)
+	scroll:SetScript("OnMouseWheel", function(self, delta)
+		ScrollTo(self:GetVerticalScroll() - delta * rowHeight * 2)
+	end)
+
+	local rows = {}
+	local list = { frame = scroll }
+	function list:SetItems(items)
+		for i, item in ipairs(items) do
+			local row = rows[i]
+			if not row then
+				row = makeRow(child)
+				row:SetSize(width - 12, rowHeight - 4)
+				row:SetPoint("TOPLEFT", 0, -(i - 1) * rowHeight)
+				rows[i] = row
+			end
+			fillRow(row, item)
+			row:Show()
+		end
+		for i = #items + 1, #rows do rows[i]:Hide() end
+		child:SetHeight(math.max(1, #items * rowHeight))
+		ScrollTo(scroll:GetVerticalScroll())
+	end
+	return list
+end
+
+---------------------------------------------------------------------------
 -- Confirm dialog, drawn over the window
 ---------------------------------------------------------------------------
 

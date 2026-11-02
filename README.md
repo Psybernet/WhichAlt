@@ -12,12 +12,14 @@ Stat priorities and trinket ratings come from [Icy Veins](https://www.icy-veins.
 
 ## Features
 
-- **Spec matches in the tooltip**, in class colours. When a spec has different priorities for different builds (hero talents, Raid vs Mythic+, survivability vs damage), the matching build is shown in brackets, such as *Brewmaster Monk (Survivability build)*.
+- **Upgrades for your characters**: *Upgrade for Detour (+12 item level)*. WhichAlt remembers what each of your characters wears and carries, so it can tell you who an item is an upgrade for, even characters that aren't max level yet.
+- **Spec matches in the tooltip**, in class colours, split into **Perfect match** (the spec's #1 and #2 stats) and **Good match** (stats tied for #2). When a spec has different priorities for different builds (hero talents, Raid vs Mythic+, survivability vs damage), the matching build is shown in brackets, such as *Brewmaster Monk (Survivability build)*.
 - **Only specs that can use the item**: it checks armor type and the item's main stat (Strength, Agility or Intellect), and weapons, shields and off-hand items follow each spec's own weapon rules. A polearm won't suggest Marksmanship Hunter, and specs that fight in two styles show which one fits, such as *Frost Death Knight (Dual Wield)*.
 - **Second best and very low ratings**: when no spec has the item's stats as its top two, it lists the specs it's second best for, or warns that the stats are very low for everyone.
 - **Trinket ratings**: the Icy Veins tier (S, A, B…) for every spec that rates the trinket.
 - **Settings window** in a clean dark style, with a switch for each part and the data status at a glance.
 - **Customise tab**: drag a spec's stats into your own order and save it, or add your own roles.
+- **Characters and Upgrades pages**: every character WhichAlt knows about, and every item in your bags and the Warband bank that's an upgrade for one of them.
 - **Light on performance**: nothing runs on a timer. Results are worked out once per item and cached.
 
 ## Installing
@@ -46,8 +48,9 @@ Hover over any piece of gear. The WhichAlt section appears at the bottom of the 
 
 Each spec has an order for the four secondary stats, for example Blood Death Knight (Deathbringer): **Critical Strike > Mastery = Versatility > Haste**. Stats joined by `=` are tied.
 
-- **Top match**: both of the item's secondary stats are in the spec's best two places. Tied stats share a place, so in the example above Critical Strike, Mastery and Versatility all count.
-- **Second best**: otherwise, both stats are within the first three priority levels, counting tied stats as one level. In the example, Haste is level 3, so any pair with Haste is second best.
+- **Perfect match**: the item has the spec's #1 stat (or one tied for #1) and a #2 stat. In the example, Critical Strike with Mastery or Versatility.
+- **Good match**: both stats are tied for #2, without the #1. In the example, Mastery with Versatility.
+- **Second best**: shown only when no spec has a perfect or good match. Both stats are within the first three priority levels, counting tied stats as one level. In the example, Haste is level 3, so any pair with Haste is second best.
 - **Very low**: everything else.
 
 The full list for every spec is in the reference image below.
@@ -62,6 +65,7 @@ Left-click the minimap button or type `/walt`. Pages are listed down the left; t
 |---|---|
 | Show WhichAlt in tooltips (same as right-clicking the minimap button) | On |
 | Show lower quality ratings ("second best" and "very low") | On |
+| Match list style: **Grouped** (Perfect match / Good match headings) or **One list** (good matches tagged) | Grouped |
 
 **Only show tooltip for:** WhichAlt only appears on items whose binding is switched on here. Off-hand items and trinkets can be switched off too.
 
@@ -88,6 +92,30 @@ Left-click the minimap button or type `/walt`. Pages are listed down the left; t
 Press **New role** under the Role dropdown, type a name and press **Create** (or Enter). The new role starts as a copy of the priority on screen, so you can set up the order first and then save it as a role. Edit it and press **Save** like any other role.
 
 Your roles show in the tooltip in brackets, for example *Windwalker Monk (Mastery stack)*. When a spec has only one Icy Veins priority, that one shows as *(Default)* once you've added a role. **Delete role** removes the selected role, after asking first.
+
+## Upgrades for your characters
+
+Log in to each of your characters once with WhichAlt installed. It records their level, spec, item level, what they're wearing and the gear in their bags, and it records the Warband bank whenever you open your bank. After that, item tooltips say who the item is an upgrade for:
+
+- *Upgrade for Detour (+12 item level, perfect stats for Guardian)*: higher item level than what Detour wears in that slot. Rings, trinkets and dual-wielded weapons compare with the weaker of the two.
+- *Upgrade for Greennemh at level 90 (+15 better than their gear, bags and the Warband bank)*: the character can't wear it yet, so it's compared with the best they already have waiting for that slot.
+
+Soulbound items only count for the character you're on. Everything is updated from game events (logging in, changing gear, bag changes, opening the bank); nothing runs on a timer.
+
+### Characters page
+
+| Option | Choices | Default |
+|---|---|---|
+| Show upgrades | On or off | On |
+| Smallest upgrade | 1, 3, 5, 10 or 15 item levels | 1 |
+| Counts if | Any of their specs can use it, their current spec can use it, or it has good or perfect stats for their current spec | Any spec |
+| Characters | All (including you), only your other characters, or only characters on the same or a connected realm (Warbound items count everywhere) | All |
+
+Below the options is every character WhichAlt knows about, with **Forget** for each one and **Clear database** at the bottom (both ask first).
+
+### Upgrades page
+
+Everything in your characters' bags and the Warband bank that's an upgrade for one of your characters, grouped by character, with where it is and how much better it is. Hover an item to see its tooltip.
 
 ## Stat priority reference
 

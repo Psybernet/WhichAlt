@@ -2,6 +2,19 @@
 
 All notable changes to WhichAlt. Versions follow [semantic versioning](https://semver.org/): the last number for fixes, the middle one for new features, the first for big changes.
 
+## [1.6.0] - 2026-11-02
+
+### Added
+- Character database: WhichAlt remembers each of your characters' level, spec, item level, equipped gear and bags, and the Warband bank when you open your bank.
+- "Upgrade for <character>" lines in item tooltips, with the item level gain and how well the stats suit their spec. Characters below the item's level are compared with what they already have in their bags and the Warband bank.
+- Characters page: upgrade options (show upgrades, smallest upgrade, what counts, which characters), the list of known characters, Forget and Clear database.
+- Upgrades page: everything in your characters' bags and the Warband bank that's an upgrade for one of them.
+- Match list style option: grouped under headings, or one list.
+
+### Changed
+- Spec matches are split into **Perfect match** (the spec's #1 stat plus a #2) and **Good match** (stats tied for #2). Pairs of stats tied for #2 used to count as a full match.
+- The settings window is a little taller to fit the new options.
+
 ## [1.5.0] - 2026-10-26
 
 ### Changed
