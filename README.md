@@ -1,5 +1,11 @@
 # <img src="images/icon.png" width="32" height="32" alt=""> WhichAlt
 
+[![Latest release](https://img.shields.io/github/v/release/Psybernet/WhichAlt?style=flat-square)](https://github.com/Psybernet/WhichAlt/releases/latest)
+[![Release build](https://img.shields.io/github/actions/workflow/status/Psybernet/WhichAlt/release.yml?style=flat-square&label=build)](https://github.com/Psybernet/WhichAlt/actions/workflows/release.yml)
+[![WoW 12.1.5](https://img.shields.io/badge/WoW-12.1.5%20Midnight-148EFF?style=flat-square)](https://worldofwarcraft.blizzard.com/)
+[![Lua](https://img.shields.io/badge/Lua-2C2D72?style=flat-square&logo=lua&logoColor=white)](https://www.lua.org/)
+[![License: MIT](https://img.shields.io/github/license/Psybernet/WhichAlt?style=flat-square)](LICENSE)
+
 A World of Warcraft addon that adds a short section to gear tooltips showing **which class and spec the item's secondary stats suit**. For example, a leather item with Haste and Versatility lists *Guardian Druid*, because those are its top two stats.
 
 Stat priorities and trinket ratings come from [Icy Veins](https://www.icy-veins.com/wow/) (patch 12.1.5, Midnight). You can override any spec's priority in the game.
